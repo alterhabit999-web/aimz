@@ -12,7 +12,9 @@
     "react-scripts": "5.0.1"
   },
   "devDependencies": {
-    "gh-pages": "^6.2.0"
+    "dotenv": "^17.4.2",
+    "gh-pages": "^6.2.0",
+    "node-appwrite": "^24.0.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -20,7 +22,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "setup:appwrite": "node scripts/setup-appwrite.js"
   },
   "eslintConfig": {
     "extends": [
