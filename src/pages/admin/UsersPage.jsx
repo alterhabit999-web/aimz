@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   UserPlus,
   Search,
@@ -16,11 +16,17 @@ import Badge from '../../components/ui/Badge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { inputStyle } from '../../components/ui/FormField';
 import {
-  DUMMY_USERS,
   teamMembershipsOf,
   findTeam,
   isTeamLeader,
 } from '../../data/dummy';
+import {
+  listProfiles,
+  updateProfile,
+  setProfileActive,
+  setProfileAdmin,
+  deleteProfile,
+} from '../../api/profiles';
 import InviteUserModal from '../../components/users/InviteUserModal';
 import EditUserModal from '../../components/users/EditUserModal';
 
@@ -31,6 +37,9 @@ import EditUserModal from '../../components/users/EditUserModal';
  *   - 招待モーダル（メール + 管理者フラグ + メッセージ）
  *   - 編集モーダル（氏名 / 管理者 / 停止）
  *   - 削除確認ダイアログ
+ *
+ * データソース：Appwrite profiles コレクション（PHASE 3 で実 DB 化）。
+ * チームメンバーシップ判定はまだダミー（後続フェーズで実 DB 化）。
  */
 export default function UsersPage() {
   const [query, setQuery] = useState('');
@@ -39,9 +48,30 @@ export default function UsersPage() {
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
+  // ─── 実 DB から profiles を取得 ───
+  const [profiles, setProfiles] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await listProfiles({ limit: 100 });
+      setProfiles(list);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || 'プロフィールの取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return DUMMY_USERS.filter(u => {
+    return profiles.filter(u => {
       const matchQ = !q ||
         u.full_name.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q);
@@ -54,20 +84,42 @@ export default function UsersPage() {
       })();
       return matchQ && matchF;
     });
-  }, [query, filter]);
+  }, [profiles, query, filter]);
 
   const handleInvited = (data) => {
+    // 招待は invitations コレクション + Appwrite Auth 連携が必要なので
+    // ここではダミーのまま（PHASE 4 で実装）
     console.log('ユーザー招待（ダミー）:', data);
   };
-  const handleEdit = (data) => {
-    console.log('ユーザー編集（ダミー）:', data);
-    alert(`${data.full_name} を更新しました（※ダミー）`);
+
+  const handleEdit = async (data) => {
+    try {
+      await updateProfile(data.id, {
+        full_name: data.full_name,
+        is_admin:  data.is_admin,
+        is_active: data.is_active,
+      });
+      await reload();
+    } catch (err) {
+      console.error(err);
+      alert('更新に失敗しました：' + (err?.message || err));
+    }
   };
-  const handleDelete = () => {
+
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    console.log('ユーザー削除（ダミー）:', deleteTarget);
-    alert(`${deleteTarget.full_name} を削除しました（※ダミー）`);
+    try {
+      await deleteProfile(deleteTarget.id);
+      setDeleteTarget(null);
+      await reload();
+    } catch (err) {
+      console.error(err);
+      alert('削除に失敗しました：' + (err?.message || err));
+    }
   };
+
+  // 不要警告抑制（将来の実装で使う想定の API を import 済み）
+  void setProfileActive; void setProfileAdmin;
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
@@ -161,7 +213,18 @@ export default function UsersPage() {
         overflow: 'hidden',
         boxShadow: C.shadow1,
       }}>
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: S.xl, textAlign: 'center', color: C.textMuted }}>
+            読み込み中...
+          </div>
+        ) : error ? (
+          <div style={{ padding: S.xl, textAlign: 'center', color: C.danger }}>
+            {error}
+            <div style={{ marginTop: S.s }}>
+              <Button variant="secondary" size="sm" onClick={reload}>再試行</Button>
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
           <div style={{ padding: S.xl, textAlign: 'center', color: C.textMuted }}>
             該当するユーザーはいません
           </div>
