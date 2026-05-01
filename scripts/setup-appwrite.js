@@ -41,13 +41,16 @@ const client = new Client()
 
 const databases = new Databases(client);
 
-// 認証済みユーザーが全操作可能（PHASE 3 初期段階の緩い権限。RLS は後続で絞る）
-const COLLECTION_PERMISSIONS = [
-  Permission.read(Role.users()),
-  Permission.create(Role.users()),
-  Permission.update(Role.users()),
-  Permission.delete(Role.users()),
+// ⚠ PHASE 3 の開発中はダミー認証で動かすため、いったん「誰でも可」で開放する。
+//   PHASE 4 で Appwrite Auth を導入した時点で Role.users() に絞り、
+//   さらに各コレクション単位の細かい権限ポリシーを実装する。
+const DEV_OPEN_PERMISSIONS = [
+  Permission.read(Role.any()),
+  Permission.create(Role.any()),
+  Permission.update(Role.any()),
+  Permission.delete(Role.any()),
 ];
+const COLLECTION_PERMISSIONS = DEV_OPEN_PERMISSIONS;
 
 // ─── ユーティリティ ───
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -59,11 +62,20 @@ function isNotFound(err) {
   return err?.code === 404;
 }
 
-// ─── コレクション作成 ───
+// ─── コレクション作成 / 権限更新 ───
 async function ensureCollection(col) {
   try {
     await databases.getCollection(DATABASE_ID, col.id);
-    console.log(`  ☑ collection: ${col.id}（既存・スキップ）`);
+    // 既存：permissions のみ最新方針に合わせて更新する（属性は破壊しない）
+    await databases.updateCollection(
+      DATABASE_ID,
+      col.id,
+      col.name,
+      COLLECTION_PERMISSIONS,
+      col.documentSecurity ?? false,
+      true // enabled
+    );
+    console.log(`  ☑ collection: ${col.id}（既存・permissions 更新）`);
   } catch (err) {
     if (!isNotFound(err)) throw err;
     await databases.createCollection(
