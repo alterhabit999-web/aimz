@@ -17,6 +17,14 @@ const PROFILES = [
   { id: 'u5', full_name: '高橋 健',   email: 'takahashi@example.com', is_admin: false, avatar_url: null },
 ];
 
+// ─────────── departments ───────────
+const DEPARTMENTS = [
+  { id: 'd1', name: '営業部', description: '営業活動全般を担当' },
+  { id: 'd2', name: '開発部', description: 'プロダクト開発を担当' },
+  { id: 'd3', name: '管理部', description: '総務・人事・経理' },
+];
+
 module.exports = {
   PROFILES,
+  DEPARTMENTS,
 };

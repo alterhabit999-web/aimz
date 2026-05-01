@@ -65,9 +65,19 @@ async function seedProfiles() {
   }
 }
 
+async function seedDepartments() {
+  console.log(`◆ departments (${seed.DEPARTMENTS.length} rows)`);
+  for (const d of seed.DEPARTMENTS) {
+    const { id, ...data } = d;
+    const r = await upsert('departments', id, data);
+    console.log(`  ${r === 'created' ? '✓' : r === 'updated' ? '↻' : '✗'} ${id} ${data.name}`);
+  }
+}
+
 // ─────────── メイン ───────────
 const TABLES = {
-  profiles: seedProfiles,
+  profiles:    seedProfiles,
+  departments: seedDepartments,
 };
 
 async function main() {

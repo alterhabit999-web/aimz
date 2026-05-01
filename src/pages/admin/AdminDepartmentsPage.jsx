@@ -1,37 +1,85 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, Building2 } from 'lucide-react';
 import { C, S, ICON_SM } from '../../styles/tokens';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import DepartmentFormModal from '../../components/departments/DepartmentFormModal';
-import { DUMMY_DEPARTMENTS, teamsByDepartment } from '../../data/dummy';
+import { teamsByDepartment } from '../../data/dummy';
+import {
+  listDepartments,
+  createDepartment,
+  updateDepartment,
+  deleteDepartment,
+} from '../../api/departments';
 
 /**
  * AdminDepartmentsPage — 部署管理（Admin のみ）。
  *
- *   - 部署一覧をテーブル表示
+ *   - 部署一覧をテーブル表示（Appwrite から取得）
  *   - 作成 / 編集 / 削除（モーダル）
  *
- * 削除時の挙動：配下にチームがある場合は警告で止める想定。
- * 現状はダミーなので alert + console.log。
+ * チーム数表示はまだダミー（teams が実 DB 化された後で連動する）。
+ * 配下チームがある部署を削除した時の整合性チェックも、teams 実 DB 化後に追加予定。
  */
 export default function AdminDepartmentsPage() {
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const handleCreate = (data) => {
-    console.log('部署作成（ダミー）:', data);
-    alert(`部署「${data.name}」を作成しました（※ダミー、まだ DB に保存されません）`);
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await listDepartments({ limit: 100 });
+      setDepartments(list);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || '部署の取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const handleCreate = async (data) => {
+    try {
+      await createDepartment({
+        name: data.name,
+        description: data.description,
+      });
+      await reload();
+    } catch (err) {
+      console.error(err);
+      alert('作成に失敗しました：' + (err?.message || err));
+    }
   };
-  const handleEdit = (data) => {
-    console.log('部署編集（ダミー）:', data);
-    alert(`部署「${data.name}」を更新しました（※ダミー）`);
+  const handleEdit = async (data) => {
+    try {
+      await updateDepartment(data.id, {
+        name: data.name,
+        description: data.description,
+      });
+      await reload();
+    } catch (err) {
+      console.error(err);
+      alert('更新に失敗しました：' + (err?.message || err));
+    }
   };
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    console.log('部署削除（ダミー）:', deleteTarget);
-    alert(`部署「${deleteTarget.name}」を削除しました（※ダミー）`);
+    try {
+      await deleteDepartment(deleteTarget.id);
+      setDeleteTarget(null);
+      await reload();
+    } catch (err) {
+      console.error(err);
+      alert('削除に失敗しました：' + (err?.message || err));
+    }
   };
 
   return (
@@ -65,7 +113,18 @@ export default function AdminDepartmentsPage() {
         overflow: 'hidden',
         boxShadow: C.shadow1,
       }}>
-        {DUMMY_DEPARTMENTS.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: S.xl, textAlign: 'center', color: C.textMuted }}>
+            読み込み中...
+          </div>
+        ) : error ? (
+          <div style={{ padding: S.xl, textAlign: 'center', color: C.danger }}>
+            {error}
+            <div style={{ marginTop: S.s }}>
+              <Button variant="secondary" size="sm" onClick={reload}>再試行</Button>
+            </div>
+          </div>
+        ) : departments.length === 0 ? (
           <EmptyState onCreate={() => setCreateOpen(true)} />
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.857rem' }}>
@@ -78,7 +137,7 @@ export default function AdminDepartmentsPage() {
               </tr>
             </thead>
             <tbody>
-              {DUMMY_DEPARTMENTS.map(dept => (
+              {departments.map(dept => (
                 <DepartmentRow
                   key={dept.id}
                   department={dept}
