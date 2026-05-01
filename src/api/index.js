@@ -9,8 +9,9 @@
 export { COLLECTIONS } from './collections';
 export * from './profiles';
 export * from './departments';
+export * from './teams';
+export * from './team-members';
 // 後続の機能実装で順次追加：
-// export * from './teams';
 // export * from './projects';
 // export * from './tasks';
 // ...

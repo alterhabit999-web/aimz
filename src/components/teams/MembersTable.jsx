@@ -3,7 +3,6 @@ import { Search, Crown } from 'lucide-react';
 import { C, S, ICON_SM } from '../../styles/tokens';
 import Avatar from '../ui/Avatar';
 import Badge from '../ui/Badge';
-import { teamMembershipsOf, findTeam, findDepartment } from '../../data/dummy';
 import { inputStyle } from '../ui/FormField';
 
 /**
@@ -11,6 +10,14 @@ import { inputStyle } from '../ui/FormField';
  *
  * 列：氏名 / 部署・チーム / ロール / メール
  * 検索：氏名・メールで絞り込み
+ *
+ * Props:
+ *   members: Array<{
+ *     id, full_name, email, is_admin,
+ *     memberships: [{ team_id, role, team: {name}, dept: {name} }]
+ *   }>
+ *
+ *   各メンバーの memberships は呼び出し側で事前に組み立てて渡す。
  */
 export default function MembersTable({ members }) {
   const [query, setQuery] = useState('');
@@ -85,13 +92,8 @@ export default function MembersTable({ members }) {
 }
 
 function MemberRow({ member }) {
-  // このメンバーが属するチームと、各チームでの役割
-  const memberships = teamMembershipsOf(member.id).map(tm => {
-    const team = findTeam(tm.team_id);
-    const dept = findDepartment(team?.department_id);
-    return { ...tm, team, dept };
-  });
-
+  // 親（TeamsPage）で組み立て済みのチーム所属情報を使う
+  const memberships = member.memberships || [];
   const isLeaderAnywhere = memberships.some(m => m.role === 'leader');
 
   return (

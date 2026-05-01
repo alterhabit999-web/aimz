@@ -2,7 +2,6 @@ import React from 'react';
 import { Crown, Users as UsersIcon } from 'lucide-react';
 import { C, S } from '../../styles/tokens';
 import Avatar from '../ui/Avatar';
-import { findDepartment, membersOfTeam } from '../../data/dummy';
 
 /**
  * TeamCard — チーム一覧の 1 枚カード。
@@ -11,12 +10,16 @@ import { findDepartment, membersOfTeam } from '../../data/dummy';
  *   - メンバー数
  *   - リーダー（王冠アイコン）と先頭数名のアバター
  *   - 説明（あれば）
+ *
+ * Props:
+ *   team: { id, name, description, department_id }
+ *   department?: { id, name }                       事前に解決した部署
+ *   members?: Array<{ id, full_name, role }>        事前に解決したメンバー一覧
  */
 const MAX_VISIBLE_AVATARS = 5;
 
-export default function TeamCard({ team }) {
-  const dept = findDepartment(team.department_id);
-  const members = membersOfTeam(team.id);
+export default function TeamCard({ team, department, members = [] }) {
+  const dept = department;
   const leaders = members.filter(m => m.role === 'leader');
   const visible = members.slice(0, MAX_VISIBLE_AVATARS);
   const remaining = members.length - visible.length;

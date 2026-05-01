@@ -74,10 +74,30 @@ async function seedDepartments() {
   }
 }
 
+async function seedTeams() {
+  console.log(`◆ teams (${seed.TEAMS.length} rows)`);
+  for (const t of seed.TEAMS) {
+    const { id, ...data } = t;
+    const r = await upsert('teams', id, data);
+    console.log(`  ${r === 'created' ? '✓' : r === 'updated' ? '↻' : '✗'} ${id} ${data.name}`);
+  }
+}
+
+async function seedTeamMembers() {
+  console.log(`◆ team_members (${seed.TEAM_MEMBERS.length} rows)`);
+  for (const tm of seed.TEAM_MEMBERS) {
+    const id = `${tm.team_id}_${tm.user_id}`;
+    const r = await upsert('team_members', id, tm);
+    console.log(`  ${r === 'created' ? '✓' : r === 'updated' ? '↻' : '✗'} ${id} (${tm.role})`);
+  }
+}
+
 // ─────────── メイン ───────────
 const TABLES = {
-  profiles:    seedProfiles,
-  departments: seedDepartments,
+  profiles:      seedProfiles,
+  departments:   seedDepartments,
+  teams:         seedTeams,
+  team_members:  seedTeamMembers,
 };
 
 async function main() {

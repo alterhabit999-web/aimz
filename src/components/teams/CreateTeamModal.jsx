@@ -1,52 +1,74 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import FormField, { inputStyle, textareaStyle, selectStyle } from '../ui/FormField';
-import { DUMMY_DEPARTMENTS, DUMMY_USERS, myDepartments } from '../../data/dummy';
 import { useAuth } from '../../contexts/AuthContext';
 import { C, S } from '../../styles/tokens';
 
 /**
- * CreateTeamModal — チーム新規作成。
+ * CreateTeamModal — チーム作成・編集モーダル。
  *
- * 仕様：
- *   - チーム名（必須）
- *   - 所属部署（必須、選択。自分の所属部署を優先表示）
- *   - 説明（任意）
- *   - リーダー（必須、自分含む全ユーザーから選択。複数可）
- *   - メンバー（任意、複数可、リーダー以外）
- *
- * 現状はダミーデータに対する書き込みは行わず、
- * onSubmit に新規チーム情報を渡すだけ。
- * （次のフェーズで Appwrite DB 連携時に実書き込みに差し替え）
+ * Props:
+ *   open: boolean
+ *   mode: 'create' | 'edit'
+ *   initial: { id, name, department_id, description, members: [{user_id, role}] }
+ *   departments: 全部署リスト（プルダウン選択肢）
+ *   profiles:    全ユーザー（メンバー選択肢）
+ *   myDeptIds:   自分の所属部署 ID 配列（hint 用）
+ *   onClose:  () => void
+ *   onSubmit: (data) => Promise<void>
+ *     data = {
+ *       id?, name, department_id, description,
+ *       members: [{ user_id, role: 'leader' | 'member' }]
+ *     }
  */
-export default function CreateTeamModal({ open, onClose, onSubmit }) {
+export default function CreateTeamModal({
+  open,
+  mode = 'create',
+  initial,
+  departments = [],
+  profiles = [],
+  myDeptIds = [],
+  onClose,
+  onSubmit,
+}) {
   const { user } = useAuth();
-  const myDeptList = myDepartments(user?.id);
-  const defaultDeptId = myDeptList[0]?.id || DUMMY_DEPARTMENTS[0]?.id || '';
+  const isEdit = mode === 'edit';
 
   const [name, setName] = useState('');
-  const [departmentId, setDepartmentId] = useState(defaultDeptId);
+  const [departmentId, setDepartmentId] = useState('');
   const [description, setDescription] = useState('');
-  const [leaderIds, setLeaderIds] = useState([user?.id].filter(Boolean));
+  const [leaderIds, setLeaderIds] = useState([]);
   const [memberIds, setMemberIds] = useState([]);
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const reset = () => {
-    setName('');
-    setDepartmentId(defaultDeptId);
-    setDescription('');
-    setLeaderIds([user?.id].filter(Boolean));
-    setMemberIds([]);
+  // open / initial 変化に応じて初期化
+  useEffect(() => {
+    if (!open) return;
+    if (isEdit && initial) {
+      setName(initial.name || '');
+      setDepartmentId(initial.department_id || '');
+      setDescription(initial.description || '');
+      const leaders = (initial.members || []).filter(m => m.role === 'leader').map(m => m.user_id);
+      const members = (initial.members || []).filter(m => m.role === 'member').map(m => m.user_id);
+      setLeaderIds(leaders);
+      setMemberIds(members);
+    } else {
+      const defaultDeptId = myDeptIds[0] || departments[0]?.id || '';
+      setName('');
+      setDepartmentId(defaultDeptId);
+      setDescription('');
+      setLeaderIds([user?.id].filter(Boolean));
+      setMemberIds([]);
+    }
     setError('');
-  };
+    setSubmitting(false);
+  }, [open, isEdit, initial, departments, myDeptIds, user?.id]);
 
-  const handleClose = () => {
-    reset();
-    onClose?.();
-  };
+  const myDeptList = departments.filter(d => myDeptIds.includes(d.id));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
       setError('チーム名を入力してください');
@@ -60,29 +82,41 @@ export default function CreateTeamModal({ open, onClose, onSubmit }) {
       setError('リーダーを 1 人以上選択してください');
       return;
     }
-    onSubmit?.({
-      name: name.trim(),
-      department_id: departmentId,
-      description: description.trim(),
-      leader_ids: leaderIds,
-      member_ids: memberIds,
-    });
-    reset();
-    onClose?.();
+    setSubmitting(true);
+    try {
+      const allMembers = [
+        ...leaderIds.map(uid => ({ user_id: uid, role: 'leader' })),
+        ...memberIds.map(uid => ({ user_id: uid, role: 'member' })),
+      ];
+      await onSubmit?.({
+        id: initial?.id,
+        name: name.trim(),
+        department_id: departmentId,
+        description: description.trim(),
+        members: allMembers,
+      });
+      onClose?.();
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || '保存に失敗しました');
+      setSubmitting(false);
+    }
   };
 
   // リーダーに選ばれているユーザーはメンバーから除外
-  const memberCandidates = DUMMY_USERS.filter(u => !leaderIds.includes(u.id));
+  const memberCandidates = profiles.filter(u => !leaderIds.includes(u.id));
 
   return (
     <Modal
       open={open}
-      title="チームを作成"
-      onClose={handleClose}
+      title={isEdit ? 'チームを編集' : 'チームを作成'}
+      onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={handleClose}>キャンセル</Button>
-          <Button onClick={handleSubmit}>作成する</Button>
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>キャンセル</Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? '保存中…' : (isEdit ? '保存する' : '作成する')}
+          </Button>
         </>
       }
     >
@@ -107,7 +141,7 @@ export default function CreateTeamModal({ open, onClose, onSubmit }) {
             style={selectStyle}
           >
             <option value="">選択してください</option>
-            {DUMMY_DEPARTMENTS.map(d => (
+            {departments.map(d => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
@@ -125,7 +159,7 @@ export default function CreateTeamModal({ open, onClose, onSubmit }) {
 
         <FormField label="リーダー" required hint="チーム作成・編集ができる人を 1 名以上指定">
           <UserMultiSelect
-            users={DUMMY_USERS}
+            users={profiles}
             selectedIds={leaderIds}
             onChange={setLeaderIds}
             placeholder="リーダーを選択"
