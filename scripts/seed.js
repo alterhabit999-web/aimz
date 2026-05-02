@@ -145,16 +145,44 @@ async function seedSubtasks() {
   }
 }
 
+// 'YYYY-MM-DDTHH:mm:ss' を ISO8601（UTC）に変換
+const toIsoDateTime = (s) => s ? new Date(s).toISOString() : null;
+
+async function seedSchedules() {
+  console.log(`◆ schedules (${seed.SCHEDULES.length} rows)`);
+  for (const s of seed.SCHEDULES) {
+    const { id, ...rest } = s;
+    const data = {
+      ...rest,
+      start_at: toIsoDateTime(rest.start_at),
+      end_at:   toIsoDateTime(rest.end_at),
+    };
+    const r = await upsert('schedules', id, data);
+    console.log(`  ${r === 'created' ? '✓' : r === 'updated' ? '↻' : '✗'} ${id} ${data.title}`);
+  }
+}
+
+async function seedScheduleParticipants() {
+  console.log(`◆ schedule_participants (${seed.SCHEDULE_PARTICIPANTS.length} rows)`);
+  for (const p of seed.SCHEDULE_PARTICIPANTS) {
+    const id = `${p.schedule_id}__${p.user_id}`;
+    const r = await upsert('schedule_participants', id, p);
+    console.log(`  ${r === 'created' ? '✓' : r === 'updated' ? '↻' : '✗'} ${id}`);
+  }
+}
+
 // ─────────── メイン ───────────
 const TABLES = {
-  profiles:           seedProfiles,
-  departments:        seedDepartments,
-  teams:              seedTeams,
-  team_members:       seedTeamMembers,
-  projects:           seedProjects,
-  project_assignees:  seedProjectAssignees,
-  tasks:              seedTasks,
-  subtasks:           seedSubtasks,
+  profiles:               seedProfiles,
+  departments:            seedDepartments,
+  teams:                  seedTeams,
+  team_members:           seedTeamMembers,
+  projects:               seedProjects,
+  project_assignees:      seedProjectAssignees,
+  tasks:                  seedTasks,
+  subtasks:               seedSubtasks,
+  schedules:              seedSchedules,
+  schedule_participants:  seedScheduleParticipants,
 };
 
 async function main() {

@@ -15,6 +15,8 @@ export * from './projects';
 export * from './project-assignees';
 export * from './tasks';
 export * from './subtasks';
+export * from './schedules';
+export * from './schedule-participants';
 // 後続の機能実装で順次追加：
-// export * from './schedules';
+// export * from './notifications';
 // ...

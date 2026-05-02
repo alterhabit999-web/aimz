@@ -1,22 +1,62 @@
-import React from 'react';
-import { Calendar, MapPin } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Calendar, MapPin, Users as UsersIcon } from 'lucide-react';
 import { C, S } from '../../styles/tokens';
 import Card from '../ui/Card';
-import { todaySchedules } from '../../data/dummy';
+import { listSchedulesOnDate, listAllScheduleParticipants } from '../../api';
 import { formatTime } from '../../utils/format';
 
 /**
  * TodayScheduleWidget — 今日の予定をタイムライン形式で表示。
- * 仕様 3-10-1。
+ * 仕様 3-10-1。Appwrite から取得（PHASE 3 で実 DB 化）。
  */
 export default function TodayScheduleWidget() {
-  const schedules = todaySchedules().slice().sort(
-    (a, b) => a.start_at.localeCompare(b.start_at)
-  );
+  const [schedules, setSchedules] = useState([]);
+  const [participantCountById, setParticipantCountById] = useState(new Map());
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+
+        const [list, participants] = await Promise.all([
+          listSchedulesOnDate(dateStr),
+          listAllScheduleParticipants({ limit: 1000 }),
+        ]);
+
+        // schedule_id → 参加人数
+        const counts = new Map();
+        for (const p of participants) {
+          counts.set(p.schedule_id, (counts.get(p.schedule_id) || 0) + 1);
+        }
+
+        if (!cancelled) {
+          setSchedules(list);
+          setParticipantCountById(counts);
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) setError(err?.message || 'スケジュール取得に失敗しました');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <Card title="本日のスケジュール" Icon={Calendar}>
-      {schedules.length === 0 ? (
+      {loading ? (
+        <EmptyState>読み込み中...</EmptyState>
+      ) : error ? (
+        <EmptyState danger>{error}</EmptyState>
+      ) : schedules.length === 0 ? (
         <EmptyState>今日の予定はありません</EmptyState>
       ) : (
         <ul style={{
@@ -28,7 +68,11 @@ export default function TodayScheduleWidget() {
           gap: S.s,
         }}>
           {schedules.map(s => (
-            <ScheduleRow key={s.id} schedule={s} />
+            <ScheduleRow
+              key={s.id}
+              schedule={s}
+              participantCount={participantCountById.get(s.id) || 0}
+            />
           ))}
         </ul>
       )}
@@ -36,7 +80,7 @@ export default function TodayScheduleWidget() {
   );
 }
 
-function ScheduleRow({ schedule }) {
+function ScheduleRow({ schedule, participantCount }) {
   return (
     <li style={{
       display: 'flex',
@@ -71,28 +115,36 @@ function ScheduleRow({ schedule }) {
         }}>
           {schedule.title}
         </div>
-        {schedule.location && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '2px',
-            fontSize: '0.75rem',
-            color: C.textSub,
-            marginTop: '2px',
-          }}>
-            <MapPin size={12} />
-            {schedule.location}
-          </div>
-        )}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: S.s,
+          marginTop: '2px',
+          fontSize: '0.75rem',
+          color: C.textSub,
+        }}>
+          {schedule.location && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+              <MapPin size={12} />
+              {schedule.location}
+            </span>
+          )}
+          {participantCount > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+              <UsersIcon size={12} />
+              {participantCount}名
+            </span>
+          )}
+        </div>
       </div>
     </li>
   );
 }
 
-function EmptyState({ children }) {
+function EmptyState({ children, danger }) {
   return (
     <p style={{
-      color: C.textMuted,
+      color: danger ? C.danger : C.textMuted,
       fontSize: '0.857rem',
       textAlign: 'center',
       padding: `${S.l} 0`,

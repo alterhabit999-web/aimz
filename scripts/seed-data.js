@@ -106,6 +106,36 @@ const TASKS = [
   { id: 'tk9',  project_id: 'p3', name: '訪問アポ取り',         description: '', status: '進行中', priority: '高', assignee_id: 'u3', start_date: '2026-04-08', due_date: '2026-05-31', progress_rate: 50,  progress_mode: 'manual', order_index: 2 },
 ];
 
+// ─────────── schedules ───────────
+// 今日（2026-05-02）周辺の予定を入れて、TodayScheduleWidget の動作を見やすくする
+const SCHEDULES = [
+  { id: 's1', project_id: 'p1', title: 'キックオフミーティング', start_at: '2026-05-02T10:00:00', end_at: '2026-05-02T11:00:00', location: '会議室 A', memo: '全員参加' },
+  { id: 's2', project_id: 'p1', title: 'デザインレビュー',       start_at: '2026-05-02T14:00:00', end_at: '2026-05-02T15:30:00', location: 'Zoom',     memo: '' },
+  { id: 's3', project_id: 'p3', title: '営業定例',               start_at: '2026-05-02T16:00:00', end_at: '2026-05-02T17:00:00', location: '会議室 B', memo: '' },
+  { id: 's4', project_id: 'p1', title: '進捗共有会',             start_at: '2026-05-05T10:00:00', end_at: '2026-05-05T11:00:00', location: '会議室 A', memo: '' },
+  { id: 's5', project_id: 'p4', title: 'API 仕様レビュー',       start_at: '2026-05-07T13:00:00', end_at: '2026-05-07T14:30:00', location: 'Zoom',     memo: '' },
+];
+
+// ─────────── schedule_participants ───────────
+const SCHEDULE_PARTICIPANTS = [
+  // s1（キックオフ）：u1, u4
+  { schedule_id: 's1', user_id: 'u1' },
+  { schedule_id: 's1', user_id: 'u4' },
+  // s2（デザインレビュー）：u1, u4
+  { schedule_id: 's2', user_id: 'u1' },
+  { schedule_id: 's2', user_id: 'u4' },
+  // s3（営業定例）：u2, u3
+  { schedule_id: 's3', user_id: 'u2' },
+  { schedule_id: 's3', user_id: 'u3' },
+  // s4（進捗共有会）：u1, u4, u5
+  { schedule_id: 's4', user_id: 'u1' },
+  { schedule_id: 's4', user_id: 'u4' },
+  { schedule_id: 's4', user_id: 'u5' },
+  // s5（API 仕様レビュー）：u1, u5
+  { schedule_id: 's5', user_id: 'u1' },
+  { schedule_id: 's5', user_id: 'u5' },
+];
+
 // ─────────── subtasks ───────────
 const SUBTASKS = [
   { id: 'st1', task_id: 'tk2', name: 'トップページ',     is_completed: true,  assignee_id: 'u4', due_date: '2026-04-25', order_index: 1 },
@@ -125,4 +155,6 @@ module.exports = {
   PROJECT_ASSIGNEES,
   TASKS,
   SUBTASKS,
+  SCHEDULES,
+  SCHEDULE_PARTICIPANTS,
 };
