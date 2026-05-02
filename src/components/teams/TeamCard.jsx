@@ -35,9 +35,9 @@ export default function TeamCard({ team, department, members = [] }) {
       flexDirection: 'column',
       gap: S.s,
     }}>
-      {/* ヘッダー */}
+      {/* ヘッダー（人数表示はアバター列下に移動。右上は編集/削除ボタン用に空ける） */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: S.s }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, paddingRight: '60px' /* アクションボタン領域 */ }}>
           <div style={{
             fontSize: '0.75rem',
             color: C.textMuted,
@@ -55,18 +55,6 @@ export default function TeamCard({ team, department, members = [] }) {
           }}>
             {team.name}
           </div>
-        </div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          color: C.textSub,
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          flexShrink: 0,
-        }}>
-          <UsersIcon size={12} />
-          {members.length}
         </div>
       </div>
 
@@ -106,12 +94,11 @@ export default function TeamCard({ team, department, members = [] }) {
         </div>
       )}
 
-      {/* メンバーアバター列 */}
+      {/* メンバーアバター列（右端に人数表示） */}
       {members.length > 0 && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '-6px',
           marginTop: 'auto',
           paddingTop: S.xs,
           borderTop: `1px dashed ${C.border}`,
@@ -144,6 +131,18 @@ export default function TeamCard({ team, department, members = [] }) {
               +{remaining}
             </div>
           )}
+          <div style={{
+            marginLeft: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            color: C.textSub,
+            fontSize: '0.75rem',
+            fontWeight: 700,
+          }}>
+            <UsersIcon size={12} />
+            {members.length}人
+          </div>
         </div>
       )}
     </div>
