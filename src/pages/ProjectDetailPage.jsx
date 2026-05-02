@@ -20,6 +20,7 @@ import {
   setAssignees,
   deleteAllForProject,
   deleteProject,
+  deleteAllFilesForProject,
 } from '../api';
 
 import ProjectHeader from '../components/projects/ProjectHeader';
@@ -158,9 +159,13 @@ export default function ProjectDetailPage() {
 
   const handleDelete = async () => {
     try {
+      // カスケード：担当者・配下ファイルを先に削除
+      await deleteAllFilesForProject(project.id);
       await deleteAllForProject(project.id);
+      // 注意：配下タスク・サブタスク・スケジュール・通知の削除は
+      // 専用カスケードヘルパーが今は無いため、案件削除時の不整合は当面残る。
+      // RLS 本実装時 / 削除フロー再設計時に整理する。
       await deleteProject(project.id);
-      // TODO: tasks 実 DB 化後に配下タスク等のカスケード削除を追加
       navigate('/projects');
     } catch (err) {
       console.error(err);

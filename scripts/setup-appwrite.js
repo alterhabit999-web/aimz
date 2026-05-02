@@ -16,14 +16,15 @@
  */
 
 require('dotenv').config();
-const { Client, Databases, Permission, Role, ID } = require('node-appwrite');
+const { Client, Databases, Storage, Permission, Role, ID } = require('node-appwrite');
 const { collections } = require('./schema');
 
 // ─── 設定 ───
-const ENDPOINT     = process.env.REACT_APP_APPWRITE_ENDPOINT;
-const PROJECT_ID   = process.env.REACT_APP_APPWRITE_PROJECT_ID;
-const DATABASE_ID  = process.env.REACT_APP_APPWRITE_DATABASE_ID;
-const API_KEY      = process.env.APPWRITE_API_KEY;
+const ENDPOINT          = process.env.REACT_APP_APPWRITE_ENDPOINT;
+const PROJECT_ID        = process.env.REACT_APP_APPWRITE_PROJECT_ID;
+const DATABASE_ID       = process.env.REACT_APP_APPWRITE_DATABASE_ID;
+const STORAGE_BUCKET_ID = process.env.REACT_APP_APPWRITE_STORAGE_BUCKET_ID;
+const API_KEY           = process.env.APPWRITE_API_KEY;
 
 if (!ENDPOINT || !PROJECT_ID || !DATABASE_ID) {
   console.error('❌ .env に REACT_APP_APPWRITE_ENDPOINT / PROJECT_ID / DATABASE_ID を設定してください');
@@ -40,6 +41,7 @@ const client = new Client()
   .setKey(API_KEY);
 
 const databases = new Databases(client);
+const storage   = new Storage(client);
 
 // ⚠ PHASE 3 の開発中はダミー認証で動かすため、いったん「誰でも可」で開放する。
 //   PHASE 4 で Appwrite Auth を導入した時点で Role.users() に絞り、
@@ -207,6 +209,40 @@ async function ensureIndex(col, idx) {
   }
 }
 
+// ─── Storage Bucket の権限同期 ───
+async function ensureStorageBucket() {
+  if (!STORAGE_BUCKET_ID) {
+    console.log('  ☑ STORAGE_BUCKET_ID 未設定（skip）');
+    return;
+  }
+  console.log(`◆ storage bucket: ${STORAGE_BUCKET_ID}`);
+  try {
+    const bucket = await storage.getBucket(STORAGE_BUCKET_ID);
+    // 開発中：ファイルアップロード/参照を全員に開放
+    await storage.updateBucket(
+      STORAGE_BUCKET_ID,
+      bucket.name || 'AimZ Files',
+      DEV_OPEN_PERMISSIONS,
+      bucket.fileSecurity ?? false,
+      bucket.enabled ?? true,
+      // 50 MB 上限（仕様書 3-7）
+      50 * 1024 * 1024,
+      // 許可拡張子（仕様書 3-7）
+      ['png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx'],
+      bucket.compression ?? 'none',
+      bucket.encryption ?? true,
+      bucket.antivirus ?? true,
+    );
+    console.log('  ☑ permissions / 制限を更新');
+  } catch (err) {
+    if (err?.code === 404) {
+      console.log('  ⚠ bucket が見つかりません。Appwrite Console で先に作成してください。');
+    } else {
+      console.error('  ✗ bucket 更新エラー:', err?.message);
+    }
+  }
+}
+
 // ─── メイン ───
 async function main() {
   console.log(`▶ setup-appwrite (${collections.length} collections)`);
@@ -228,6 +264,9 @@ async function main() {
     }
     console.log('');
   }
+
+  await ensureStorageBucket();
+  console.log('');
 
   console.log('✅ Appwrite セットアップ完了');
 }
