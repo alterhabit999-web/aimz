@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Plus, X, GripVertical } from 'lucide-react';
 import { C, S, ICON_SM } from '../../styles/tokens';
 import Avatar from '../ui/Avatar';
-import { findUser } from '../../data/dummy';
 import { formatShortDate } from '../../utils/format';
 import { inputStyle } from '../ui/FormField';
 
@@ -12,14 +11,15 @@ import { inputStyle } from '../ui/FormField';
  * Q2=A：チェックリスト形式 + 末尾に「+ 追加」入力欄を常時表示。
  *
  * Props:
- *   subtasks: array
- *   onChange: (newList) => void   ─ 親に新しい配列を返す
- *   readOnly: boolean             ─ true で操作不可
+ *   subtasks: array  各要素 { id, name, is_completed, assignee_id, due_date }
+ *   onChange: (newList) => void
+ *   readOnly: boolean
+ *   profileById?: Map(userId -> profile)  担当者表示用（任意）
  */
 let nextLocalId = 9999;
 const newId = () => `st-local-${++nextLocalId}`;
 
-export default function SubtaskList({ subtasks = [], onChange, readOnly = false }) {
+export default function SubtaskList({ subtasks = [], onChange, readOnly = false, profileById }) {
   const [draftName, setDraftName] = useState('');
 
   const addSubtask = () => {
@@ -77,6 +77,7 @@ export default function SubtaskList({ subtasks = [], onChange, readOnly = false 
               onRemove={() => removeSubtask(s.id)}
               onRename={(name) => updateName(s.id, name)}
               readOnly={readOnly}
+              profileById={profileById}
             />
           ))}
         </ul>
@@ -148,10 +149,10 @@ export default function SubtaskList({ subtasks = [], onChange, readOnly = false 
 // ============================================================
 // SubtaskRow
 // ============================================================
-function SubtaskRow({ subtask, onToggle, onRemove, onRename, readOnly }) {
+function SubtaskRow({ subtask, onToggle, onRemove, onRename, readOnly, profileById }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(subtask.name);
-  const assignee = subtask.assignee_id ? findUser(subtask.assignee_id) : null;
+  const assignee = subtask.assignee_id ? (profileById?.get(subtask.assignee_id) || null) : null;
 
   const finishEdit = () => {
     const trimmed = name.trim();

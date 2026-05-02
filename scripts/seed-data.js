@@ -89,6 +89,33 @@ const PROJECT_ASSIGNEES = [
   { project_id: 'p4', user_id: 'u5' },
 ];
 
+// ─────────── tasks ───────────
+const TASKS = [
+  // p1
+  { id: 'tk1',  project_id: 'p1', name: '要件定義',         description: '機能要件・非機能要件の整理', status: '完了',   priority: '高', assignee_id: 'u1', start_date: '2026-04-01', due_date: '2026-04-15', progress_rate: 100, progress_mode: 'manual', order_index: 1 },
+  { id: 'tk2',  project_id: 'p1', name: 'デザインモックアップ', description: 'Figma で各画面のモックを作成', status: '進行中', priority: '高', assignee_id: 'u4', start_date: '2026-04-10', due_date: '2026-05-05', progress_rate: 60,  progress_mode: 'auto',   order_index: 2 },
+  { id: 'tk3',  project_id: 'p1', name: 'フロントエンド実装', description: 'React + デザインシステムで実装', status: '進行中', priority: '中', assignee_id: 'u1', start_date: '2026-04-20', due_date: '2026-05-02', progress_rate: 30,  progress_mode: 'auto',   order_index: 3 },
+  { id: 'tk4',  project_id: 'p1', name: 'バックエンド連携',   description: '', status: '未着手', priority: '中', assignee_id: 'u5', start_date: '2026-05-15', due_date: '2026-06-20', progress_rate: 0, progress_mode: 'manual', order_index: 4 },
+  { id: 'tk5',  project_id: 'p1', name: 'リリース準備',       description: '', status: '未着手', priority: '高', assignee_id: 'u1', start_date: '2026-06-15', due_date: '2026-06-30', progress_rate: 0, progress_mode: 'manual', order_index: 5 },
+  { id: 'tk10', project_id: 'p1', name: 'API 設計レビュー',   description: 'エンドポイント・スキーマのレビュー', status: '進行中', priority: '高', assignee_id: 'u1', start_date: '2026-04-22', due_date: '2026-04-27', progress_rate: 70, progress_mode: 'manual', order_index: 6 },
+  // p2
+  { id: 'tk6',  project_id: 'p2', name: '技術選定',         description: 'RN vs ネイティブの比較検討', status: '未着手', priority: '高', assignee_id: 'u1', start_date: '2026-04-30', due_date: '2026-05-05', progress_rate: 0, progress_mode: 'manual', order_index: 1 },
+  { id: 'tk7',  project_id: 'p2', name: 'プロトタイプ作成', description: '', status: '未着手', priority: '中', assignee_id: 'u4', start_date: '2026-06-01', due_date: '2026-06-30', progress_rate: 0, progress_mode: 'manual', order_index: 2 },
+  // p3
+  { id: 'tk8',  project_id: 'p3', name: 'ターゲットリスト作成', description: '', status: '完了',   priority: '高', assignee_id: 'u2', start_date: '2026-04-01', due_date: '2026-04-10', progress_rate: 100, progress_mode: 'manual', order_index: 1 },
+  { id: 'tk9',  project_id: 'p3', name: '訪問アポ取り',         description: '', status: '進行中', priority: '高', assignee_id: 'u3', start_date: '2026-04-08', due_date: '2026-05-31', progress_rate: 50,  progress_mode: 'manual', order_index: 2 },
+];
+
+// ─────────── subtasks ───────────
+const SUBTASKS = [
+  { id: 'st1', task_id: 'tk2', name: 'トップページ',     is_completed: true,  assignee_id: 'u4', due_date: '2026-04-25', order_index: 1 },
+  { id: 'st2', task_id: 'tk2', name: '一覧ページ',       is_completed: true,  assignee_id: 'u4', due_date: '2026-04-28', order_index: 2 },
+  { id: 'st3', task_id: 'tk2', name: '詳細ページ',       is_completed: false, assignee_id: 'u4', due_date: '2026-05-02', order_index: 3 },
+  { id: 'st4', task_id: 'tk2', name: '管理画面',         is_completed: false, assignee_id: 'u4', due_date: '2026-05-05', order_index: 4 },
+  { id: 'st5', task_id: 'tk3', name: 'コンポーネント設計', is_completed: true,  assignee_id: 'u1', due_date: '2026-04-25', order_index: 1 },
+  { id: 'st6', task_id: 'tk3', name: 'ルーティング実装',   is_completed: false, assignee_id: 'u1', due_date: '2026-05-10', order_index: 2 },
+];
+
 module.exports = {
   PROFILES,
   DEPARTMENTS,
@@ -96,4 +123,6 @@ module.exports = {
   TEAM_MEMBERS,
   PROJECTS,
   PROJECT_ASSIGNEES,
+  TASKS,
+  SUBTASKS,
 };

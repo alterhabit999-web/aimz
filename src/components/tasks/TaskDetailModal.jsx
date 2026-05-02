@@ -5,13 +5,6 @@ import Button from '../ui/Button';
 import FormField, { inputStyle, textareaStyle, selectStyle } from '../ui/FormField';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { C, S } from '../../styles/tokens';
-import {
-  subtasksByTask,
-  subtaskProgress,
-  teamMembersForProject,
-} from '../../data/dummy';
-import { useAuth } from '../../contexts/AuthContext';
-import { canEditTask } from '../../data/dummy';
 
 import SubtaskList from './SubtaskList';
 import ProgressModeControl from './ProgressModeControl';
@@ -20,18 +13,28 @@ import CommentsPlaceholder from './CommentsPlaceholder';
 const STATUS_OPTIONS   = ['未着手', '進行中', '完了'];
 const PRIORITY_OPTIONS = ['高', '中', '低'];
 
+/** 小タスク完了率（リアルタイム計算） */
+const calcSubtaskProgress = (list) => {
+  if (!list || list.length === 0) return 0;
+  const done = list.filter(s => s.is_completed).length;
+  return Math.round((done / list.length) * 100);
+};
+
 /**
  * TaskDetailModal — タスクの作成・編集・小タスク管理・コメント枠を一体化したモーダル。
  *
  * Props:
- *   open: boolean
- *   mode: 'create' | 'edit'
- *   project: { id, team_id, ... }    必須（チームメンバー選択肢取得用）
+ *   open, mode: 'create' | 'edit'
+ *   project: { id, team_id, ... }     必須（チームメンバー選択肢取得用）
  *   initial: 既存タスク（edit 時）   省略時は新規作成
+ *     edit 時は呼び出し側で listSubtasksByTask の結果を `subtasks` プロパティに含めて渡す
  *   defaultStatus: 'create' 時の初期ステータス（カンバンの「+」から起動時に使う）
- *   onClose: () => void
- *   onSubmit: (data) => void          ─ 親タスク + 小タスク配列を渡す
- *   onDelete: (task) => void          ─ edit 時のみ
+ *   teamMembers, profiles: 担当者選択肢の構築用（props 駆動）
+ *   editable: 編集可能フラグ（呼び出し側で権限判定済み）
+ *   onClose:  () => void
+ *   onSubmit: (data) => Promise<void>
+ *     data = { task: {...}, subtasks: [...] }
+ *   onDelete: (task) => Promise<void>   edit 時のみ
  */
 export default function TaskDetailModal({
   open,
@@ -39,13 +42,14 @@ export default function TaskDetailModal({
   project,
   initial,
   defaultStatus,
+  teamMembers = [],
+  profiles = [],
+  editable = true,
   onClose,
   onSubmit,
   onDelete,
 }) {
-  const { user } = useAuth();
   const isEdit = mode === 'edit';
-  const editable = isEdit ? canEditTask(user, initial) : true;
 
   // 親タスクのフォーム値
   const [name, setName]             = useState('');
@@ -62,13 +66,21 @@ export default function TaskDetailModal({
   const [subtasks, setSubtasks] = useState([]);
 
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  // チームメンバー（担当者選択肢）
-  const memberOptions = useMemo(
-    () => (project ? teamMembersForProject(project) : []),
-    [project]
-  );
+  // 担当者選択肢：当該案件のチームメンバー
+  const profileById = useMemo(() => new Map(profiles.map(p => [p.id, p])), [profiles]);
+  const memberOptions = useMemo(() => {
+    if (!project?.team_id) return [];
+    return teamMembers
+      .filter(m => m.team_id === project.team_id)
+      .map(m => {
+        const p = profileById.get(m.user_id);
+        return p ? { ...p, role: m.role } : null;
+      })
+      .filter(Boolean);
+  }, [project?.team_id, teamMembers, profileById]);
 
   // open / initial 変化に追随してフォームを初期化
   useEffect(() => {
@@ -83,7 +95,7 @@ export default function TaskDetailModal({
       setDueDate(initial.due_date || '');
       setProgressMode(initial.progress_mode || 'manual');
       setManualProgress(initial.progress_rate ?? 0);
-      setSubtasks(subtasksByTask(initial.id));
+      setSubtasks(initial.subtasks || []);
     } else {
       setName('');
       setDescription('');
@@ -97,13 +109,14 @@ export default function TaskDetailModal({
       setSubtasks([]);
     }
     setError('');
+    setSubmitting(false);
     setDeleteConfirmOpen(false);
   }, [open, isEdit, initial, defaultStatus]);
 
   // auto モード時のリアルタイム計算値
-  const autoProgress = subtaskProgress(initial?.id, subtasks);
+  const autoProgress = calcSubtaskProgress(subtasks);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!name.trim()) { setError('タスク名を入力してください'); return; }
     if (startDate && dueDate && startDate > dueDate) {
@@ -112,28 +125,40 @@ export default function TaskDetailModal({
     }
     const finalProgress = progressMode === 'auto' ? autoProgress : manualProgress;
 
-    onSubmit?.({
-      task: {
-        ...(isEdit ? { id: initial.id } : {}),
-        project_id: project?.id,
-        name: name.trim(),
-        description: description.trim(),
-        status,
-        priority,
-        assignee_id: assigneeId || null,
-        start_date: startDate || null,
-        due_date: dueDate || null,
-        progress_mode: progressMode,
-        progress_rate: finalProgress,
-      },
-      subtasks,
-    });
-    onClose?.();
+    setSubmitting(true);
+    try {
+      await onSubmit?.({
+        task: {
+          ...(isEdit ? { id: initial.id } : {}),
+          project_id: project?.id,
+          name: name.trim(),
+          description: description.trim(),
+          status,
+          priority,
+          assignee_id: assigneeId || null,
+          start_date: startDate || null,
+          due_date: dueDate || null,
+          progress_mode: progressMode,
+          progress_rate: finalProgress,
+        },
+        subtasks,
+      });
+      onClose?.();
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || '保存に失敗しました');
+      setSubmitting(false);
+    }
   };
 
-  const handleDelete = () => {
-    onDelete?.(initial);
-    onClose?.();
+  const handleDelete = async () => {
+    try {
+      await onDelete?.(initial);
+      onClose?.();
+    } catch (err) {
+      console.error(err);
+      alert('削除に失敗しました：' + (err?.message || err));
+    }
   };
 
   return (
@@ -157,6 +182,7 @@ export default function TaskDetailModal({
                   variant="ghost"
                   Icon={Trash2}
                   onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={submitting}
                   style={{ color: C.danger }}
                 >
                   削除
@@ -164,9 +190,9 @@ export default function TaskDetailModal({
               )}
             </div>
             <div style={{ display: 'flex', gap: S.s }}>
-              <Button variant="secondary" onClick={onClose}>キャンセル</Button>
-              <Button onClick={handleSubmit} disabled={!editable}>
-                {isEdit ? '保存する' : '作成する'}
+              <Button variant="secondary" onClick={onClose} disabled={submitting}>キャンセル</Button>
+              <Button onClick={handleSubmit} disabled={!editable || submitting}>
+                {submitting ? '保存中…' : (isEdit ? '保存する' : '作成する')}
               </Button>
             </div>
           </div>
@@ -282,6 +308,7 @@ export default function TaskDetailModal({
               subtasks={subtasks}
               onChange={setSubtasks}
               readOnly={!editable}
+              profileById={profileById}
             />
           </FormField>
 

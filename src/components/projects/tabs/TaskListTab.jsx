@@ -1,26 +1,80 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckSquare, Plus } from 'lucide-react';
 import { C, S } from '../../../styles/tokens';
-import { tasksByProject, findUser, subtasksByTask, canCreateTask, computedProgress } from '../../../data/dummy';
 import { useAuth } from '../../../contexts/AuthContext';
 import Avatar from '../../ui/Avatar';
 import Badge, { statusVariant, priorityVariant } from '../../ui/Badge';
 import Button from '../../ui/Button';
 import { formatShortDate } from '../../../utils/format';
 import TaskDetailModal from '../../tasks/TaskDetailModal';
+import {
+  listTasksByProject,
+  listSubtasksByTask,
+  listProfiles,
+  listAllTeamMembers,
+  createTask,
+  updateTask,
+  deleteTask,
+  setSubtasksForTask,
+  deleteAllSubtasksForTask,
+} from '../../../api';
 
 /**
- * TaskListTab — タスク一覧タブ。
- * 行クリックでタスク詳細モーダルを開く。+ 新規ボタンで作成モーダルを開く。
+ * TaskListTab — 案件詳細「タスク一覧」タブ。
+ *
+ * - 当該案件のタスクを Appwrite から取得
+ * - クリック / ＋ボタンで TaskDetailModal を開いて作成・編集
+ * - 親タスク + 小タスクを同時に保存（API 内で差分同期）
  */
 export default function TaskListTab({ project }) {
   const { user } = useAuth();
-  const tasks = tasksByProject(project.id);
-  const allowCreate = canCreateTask(user, project);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create');
+  const [tasks, setTasks]               = useState([]);
+  const [subtasksByTaskMap, setStMap]   = useState(new Map()); // taskId → subtasks[]
+  const [profiles, setProfiles]         = useState([]);
+  const [teamMembers, setTeamMembers]   = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
+
+  const [modalOpen, setModalOpen]       = useState(false);
+  const [modalMode, setModalMode]       = useState('create');
   const [selectedTask, setSelectedTask] = useState(null);
+
+  // 権限：admin or 案件チームメンバー
+  const allowCreate = useMemo(() => {
+    if (!user) return false;
+    if (user.is_admin) return true;
+    return teamMembers.some(m => m.user_id === user.id && m.team_id === project.team_id);
+  }, [user, teamMembers, project.team_id]);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [ts, pr, tm] = await Promise.all([
+        listTasksByProject(project.id),
+        listProfiles({ limit: 200 }),
+        listAllTeamMembers(),
+      ]);
+      // 各タスクの小タスクを並行取得
+      const stEntries = await Promise.all(
+        ts.map(async t => [t.id, await listSubtasksByTask(t.id)])
+      );
+      setTasks(ts);
+      setStMap(new Map(stEntries));
+      setProfiles(pr);
+      setTeamMembers(tm);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || 'タスクの取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  }, [project.id]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const profileById = useMemo(() => new Map(profiles.map(p => [p.id, p])), [profiles]);
 
   const openCreate = () => {
     setSelectedTask(null);
@@ -28,19 +82,38 @@ export default function TaskListTab({ project }) {
     setModalOpen(true);
   };
   const openEdit = (task) => {
-    setSelectedTask(task);
+    // 既存の小タスクを混ぜて initial に渡す
+    setSelectedTask({ ...task, subtasks: subtasksByTaskMap.get(task.id) || [] });
     setModalMode('edit');
     setModalOpen(true);
   };
 
-  const handleSubmit = (data) => {
-    console.log(modalMode === 'edit' ? 'タスク更新（ダミー）:' : 'タスク作成（ダミー）:', data);
-    alert(`タスク「${data.task.name}」を${modalMode === 'edit' ? '更新' : '作成'}しました（※ダミー）`);
+  const handleSubmit = async ({ task, subtasks }) => {
+    if (modalMode === 'edit' && task.id) {
+      const { id, ...patch } = task;
+      await updateTask(id, patch);
+      await setSubtasksForTask(id, subtasks);
+    } else {
+      const created = await createTask({
+        ...task,
+        order_index: tasks.length, // 末尾に追加
+        created_by: user?.id || null,
+      });
+      if (subtasks?.length) {
+        await setSubtasksForTask(created.id, subtasks);
+      }
+    }
+    await reload();
   };
-  const handleDelete = (task) => {
-    console.log('タスク削除（ダミー）:', task);
-    alert(`タスク「${task.name}」を削除しました（※ダミー）`);
+
+  const handleDelete = async (task) => {
+    if (!task) return;
+    await deleteAllSubtasksForTask(task.id);
+    await deleteTask(task.id);
+    await reload();
   };
+
+  const editable = allowCreate;
 
   return (
     <div>
@@ -52,7 +125,7 @@ export default function TaskListTab({ project }) {
         marginBottom: S.m,
       }}>
         <div style={{ color: C.textSub, fontSize: '0.857rem' }}>
-          {tasks.length} 件のタスク
+          {loading ? '読み込み中…' : `${tasks.length} 件のタスク`}
         </div>
         {allowCreate && (
           <Button size="sm" Icon={Plus} onClick={openCreate}>
@@ -61,7 +134,18 @@ export default function TaskListTab({ project }) {
         )}
       </div>
 
-      {tasks.length === 0 ? (
+      {error ? (
+        <div style={{ padding: S.xl, textAlign: 'center', color: C.danger }}>
+          {error}
+          <div style={{ marginTop: S.s }}>
+            <Button variant="secondary" size="sm" onClick={reload}>再試行</Button>
+          </div>
+        </div>
+      ) : loading ? (
+        <div style={{ padding: S.xl, textAlign: 'center', color: C.textMuted }}>
+          読み込み中...
+        </div>
+      ) : tasks.length === 0 ? (
         <EmptyState onCreate={allowCreate ? openCreate : null} />
       ) : (
         <div style={{
@@ -84,7 +168,13 @@ export default function TaskListTab({ project }) {
             </thead>
             <tbody>
               {tasks.map(t => (
-                <TaskRow key={t.id} task={t} onClick={() => openEdit(t)} />
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  subtasks={subtasksByTaskMap.get(t.id) || []}
+                  profileById={profileById}
+                  onClick={() => openEdit(t)}
+                />
               ))}
             </tbody>
           </table>
@@ -96,6 +186,9 @@ export default function TaskListTab({ project }) {
         mode={modalMode}
         project={project}
         initial={selectedTask}
+        teamMembers={teamMembers}
+        profiles={profiles}
+        editable={editable}
         onClose={() => setModalOpen(false)}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
@@ -104,11 +197,12 @@ export default function TaskListTab({ project }) {
   );
 }
 
-function TaskRow({ task, onClick }) {
-  const assignee = task.assignee_id ? findUser(task.assignee_id) : null;
-  const subtasks = subtasksByTask(task.id);
+function TaskRow({ task, subtasks, profileById, onClick }) {
+  const assignee = task.assignee_id ? profileById.get(task.assignee_id) : null;
   const completedSubtasks = subtasks.filter(s => s.is_completed).length;
-  const progress = computedProgress(task);
+  const progress = task.progress_mode === 'auto'
+    ? (subtasks.length === 0 ? 0 : Math.round((completedSubtasks / subtasks.length) * 100))
+    : (task.progress_rate ?? 0);
 
   return (
     <tr

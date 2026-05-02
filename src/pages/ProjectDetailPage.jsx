@@ -15,6 +15,7 @@ import {
   listDepartments,
   listTeams,
   listAllTeamMembers,
+  listTasksByProject,
   updateProject,
   setAssignees,
   deleteAllForProject,
@@ -56,6 +57,7 @@ export default function ProjectDetailPage() {
   const [departments, setDepartments]   = useState([]);
   const [teams, setTeams]               = useState([]);
   const [teamMembers, setTeamMembers]   = useState([]);
+  const [tasks, setTasks]               = useState([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
   const [notFound, setNotFound]         = useState(false);
@@ -68,13 +70,14 @@ export default function ProjectDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const [pr, pa, prof, d, t, tm] = await Promise.all([
+      const [pr, pa, prof, d, t, tm, tk] = await Promise.all([
         getProject(projectId),
         listAssigneesOfProject(projectId),
         listProfiles({ limit: 200 }),
         listDepartments(),
         listTeams(),
         listAllTeamMembers(),
+        listTasksByProject(projectId),
       ]);
       if (!pr) {
         setNotFound(true);
@@ -86,6 +89,7 @@ export default function ProjectDetailPage() {
       setDepartments(d);
       setTeams(t);
       setTeamMembers(tm);
+      setTasks(tk);
     } catch (err) {
       console.error(err);
       setError(err?.message || 'データ取得に失敗しました');
@@ -110,11 +114,15 @@ export default function ProjectDetailPage() {
     const editable = !!user?.is_admin || !!myMembership;
     // 自分の所属チーム ID（編集モーダル用）
     const myTeamIds = teamMembers.filter(m => m.user_id === user?.id).map(m => m.team_id);
+    // 進捗：配下タスクの progress_rate 平均
+    const progress = tasks.length === 0
+      ? 0
+      : Math.round(tasks.reduce((acc, t) => acc + (t.progress_rate || 0), 0) / tasks.length);
     return {
-      team, department, assignees, editable, myTeamIds,
+      team, department, assignees, editable, myTeamIds, progress,
       assigneeIds: assigneeRows.map(a => a.user_id),
     };
-  }, [project, profiles, teams, departments, assigneeRows, teamMembers, user]);
+  }, [project, profiles, teams, departments, assigneeRows, teamMembers, tasks, user]);
 
   if (notFound) {
     return <Navigate to="/projects" replace />;
@@ -170,7 +178,7 @@ export default function ProjectDetailPage() {
         team={view.team}
         department={view.department}
         assignees={view.assignees}
-        progress={0 /* tasks 実 DB 化フェーズで再計算 */}
+        progress={view.progress}
         canEdit={view.editable}
         onEdit={() => setEditOpen(true)}
         onDelete={() => setDeleteOpen(true)}

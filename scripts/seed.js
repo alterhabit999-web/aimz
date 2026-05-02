@@ -118,6 +118,33 @@ async function seedProjectAssignees() {
   }
 }
 
+async function seedTasks() {
+  console.log(`◆ tasks (${seed.TASKS.length} rows)`);
+  for (const t of seed.TASKS) {
+    const { id, ...rest } = t;
+    const data = {
+      ...rest,
+      start_date: toIso(rest.start_date),
+      due_date:   toIso(rest.due_date),
+    };
+    const r = await upsert('tasks', id, data);
+    console.log(`  ${r === 'created' ? '✓' : r === 'updated' ? '↻' : '✗'} ${id} ${data.name}`);
+  }
+}
+
+async function seedSubtasks() {
+  console.log(`◆ subtasks (${seed.SUBTASKS.length} rows)`);
+  for (const s of seed.SUBTASKS) {
+    const { id, ...rest } = s;
+    const data = {
+      ...rest,
+      due_date: toIso(rest.due_date),
+    };
+    const r = await upsert('subtasks', id, data);
+    console.log(`  ${r === 'created' ? '✓' : r === 'updated' ? '↻' : '✗'} ${id} ${data.name}`);
+  }
+}
+
 // ─────────── メイン ───────────
 const TABLES = {
   profiles:           seedProfiles,
@@ -126,6 +153,8 @@ const TABLES = {
   team_members:       seedTeamMembers,
   projects:           seedProjects,
   project_assignees:  seedProjectAssignees,
+  tasks:              seedTasks,
+  subtasks:           seedSubtasks,
 };
 
 async function main() {

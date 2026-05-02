@@ -11,6 +11,7 @@ import {
   listAllTeamMembers,
   listProjects,
   listAllProjectAssignees,
+  listTasks,
   createProject,
   setAssignees,
 } from '../api';
@@ -36,6 +37,7 @@ export default function ProjectsPage() {
   const [teamMembers, setTeamMembers]     = useState([]);
   const [projects, setProjects]           = useState([]);
   const [assigneeRows, setAssigneeRows]   = useState([]);
+  const [tasks, setTasks]                 = useState([]);
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState(null);
 
@@ -47,13 +49,14 @@ export default function ProjectsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [p, d, t, tm, pr, pa] = await Promise.all([
+      const [p, d, t, tm, pr, pa, tk] = await Promise.all([
         listProfiles({ limit: 200 }),
         listDepartments(),
         listTeams(),
         listAllTeamMembers(),
         listProjects(),
         listAllProjectAssignees(),
+        listTasks(),
       ]);
       setProfiles(p);
       setDepartments(d);
@@ -61,6 +64,7 @@ export default function ProjectsPage() {
       setTeamMembers(tm);
       setProjects(pr);
       setAssigneeRows(pa);
+      setTasks(tk);
     } catch (err) {
       console.error(err);
       setError(err?.message || 'データ取得に失敗しました');
@@ -96,6 +100,20 @@ export default function ProjectsPage() {
       assigneesByProject.set(a.project_id, list);
     }
 
+    // 案件 → 進捗率（配下タスクの progress_rate 平均）
+    const progressByProject = new Map();
+    const tasksByProj = new Map();
+    for (const t of tasks) {
+      const arr = tasksByProj.get(t.project_id) || [];
+      arr.push(t);
+      tasksByProj.set(t.project_id, arr);
+    }
+    for (const [pid, arr] of tasksByProj) {
+      if (arr.length === 0) { progressByProject.set(pid, 0); continue; }
+      const sum = arr.reduce((acc, t) => acc + (t.progress_rate || 0), 0);
+      progressByProject.set(pid, Math.round(sum / arr.length));
+    }
+
     // 作成権限：admin or いずれかのチームメンバー
     const canCreate = isAdmin || myMemberships.length > 0;
 
@@ -104,10 +122,11 @@ export default function ProjectsPage() {
       departmentById,
       visibleTeams,
       assigneesByProject,
+      progressByProject,
       myTeamIds: myTeamIdArr,
       canCreate,
     };
-  }, [profiles, departments, teams, teamMembers, assigneeRows, user?.id, user?.is_admin]);
+  }, [profiles, departments, teams, teamMembers, assigneeRows, tasks, user?.id, user?.is_admin]);
 
   // チーム別グルーピング
   const teamGroups = useMemo(() => {
@@ -279,7 +298,7 @@ export default function ProjectsPage() {
                         key={p.id}
                         project={p}
                         assignees={view.assigneesByProject.get(p.id) || []}
-                        progress={0 /* TODO: tasks 実 DB 化後に再計算 */}
+                        progress={view.progressByProject.get(p.id) || 0}
                       />
                     ))}
                   </div>

@@ -1,12 +1,22 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { GanttChartSquare, Plus } from 'lucide-react';
 import { C, S } from '../../../styles/tokens';
-import { tasksByProject, canCreateTask, computedProgress } from '../../../data/dummy';
 import { useAuth } from '../../../contexts/AuthContext';
 import Badge, { statusVariant, priorityVariant } from '../../ui/Badge';
 import Button from '../../ui/Button';
 import { formatShortDate } from '../../../utils/format';
 import TaskDetailModal from '../../tasks/TaskDetailModal';
+import {
+  listTasksByProject,
+  listSubtasksByTask,
+  listProfiles,
+  listAllTeamMembers,
+  createTask,
+  updateTask,
+  deleteTask,
+  setSubtasksForTask,
+  deleteAllSubtasksForTask,
+} from '../../../api';
 
 /**
  * GanttTab — ガントチャートタブ（プレースホルダー実装）。
@@ -14,12 +24,49 @@ import TaskDetailModal from '../../tasks/TaskDetailModal';
  */
 export default function GanttTab({ project }) {
   const { user } = useAuth();
-  const tasks = tasksByProject(project.id);
-  const allowCreate = canCreateTask(user, project);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create');
+  const [tasks, setTasks]               = useState([]);
+  const [subtasksByTaskMap, setStMap]   = useState(new Map());
+  const [profiles, setProfiles]         = useState([]);
+  const [teamMembers, setTeamMembers]   = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
+
+  const [modalOpen, setModalOpen]       = useState(false);
+  const [modalMode, setModalMode]       = useState('create');
   const [selectedTask, setSelectedTask] = useState(null);
+
+  const allowCreate = useMemo(() => {
+    if (!user) return false;
+    if (user.is_admin) return true;
+    return teamMembers.some(m => m.user_id === user.id && m.team_id === project.team_id);
+  }, [user, teamMembers, project.team_id]);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [ts, pr, tm] = await Promise.all([
+        listTasksByProject(project.id),
+        listProfiles({ limit: 200 }),
+        listAllTeamMembers(),
+      ]);
+      const stEntries = await Promise.all(
+        ts.map(async t => [t.id, await listSubtasksByTask(t.id)])
+      );
+      setTasks(ts);
+      setStMap(new Map(stEntries));
+      setProfiles(pr);
+      setTeamMembers(tm);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || 'タスクの取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  }, [project.id]);
+
+  useEffect(() => { reload(); }, [reload]);
 
   const openCreate = () => {
     setSelectedTask(null);
@@ -27,17 +74,32 @@ export default function GanttTab({ project }) {
     setModalOpen(true);
   };
   const openEdit = (task) => {
-    setSelectedTask(task);
+    setSelectedTask({ ...task, subtasks: subtasksByTaskMap.get(task.id) || [] });
     setModalMode('edit');
     setModalOpen(true);
   };
-  const handleSubmit = (data) => {
-    console.log(modalMode === 'edit' ? 'タスク更新（ダミー）:' : 'タスク作成（ダミー）:', data);
-    alert(`タスク「${data.task.name}」を${modalMode === 'edit' ? '更新' : '作成'}しました（※ダミー）`);
+
+  const handleSubmit = async ({ task, subtasks }) => {
+    if (modalMode === 'edit' && task.id) {
+      const { id, ...patch } = task;
+      await updateTask(id, patch);
+      await setSubtasksForTask(id, subtasks);
+    } else {
+      const created = await createTask({
+        ...task,
+        order_index: tasks.length,
+        created_by: user?.id || null,
+      });
+      if (subtasks?.length) await setSubtasksForTask(created.id, subtasks);
+    }
+    await reload();
   };
-  const handleDelete = (task) => {
-    console.log('タスク削除（ダミー）:', task);
-    alert(`タスク「${task.name}」を削除しました（※ダミー）`);
+
+  const handleDelete = async (task) => {
+    if (!task) return;
+    await deleteAllSubtasksForTask(task.id);
+    await deleteTask(task.id);
+    await reload();
   };
 
   return (
@@ -54,7 +116,7 @@ export default function GanttTab({ project }) {
         marginBottom: S.s,
       }}>
         <div style={{ color: C.textSub, fontSize: '0.857rem' }}>
-          {tasks.length} 件のタスク
+          {loading ? '読み込み中…' : `${tasks.length} 件のタスク`}
         </div>
         {allowCreate && (
           <Button size="sm" Icon={Plus} onClick={openCreate}>
@@ -63,7 +125,15 @@ export default function GanttTab({ project }) {
         )}
       </div>
 
-      {tasks.length === 0 ? (
+      {error ? (
+        <div style={{ padding: S.xl, textAlign: 'center', color: C.danger }}>
+          {error}
+        </div>
+      ) : loading ? (
+        <div style={{ padding: S.xl, textAlign: 'center', color: C.textMuted }}>
+          読み込み中...
+        </div>
+      ) : tasks.length === 0 ? (
         <EmptyTasks />
       ) : (
         <div style={{
@@ -73,7 +143,10 @@ export default function GanttTab({ project }) {
           overflow: 'hidden',
         }}>
           {tasks.map((t, i) => {
-            const progress = computedProgress(t);
+            const sts = subtasksByTaskMap.get(t.id) || [];
+            const progress = t.progress_mode === 'auto'
+              ? (sts.length === 0 ? 0 : Math.round((sts.filter(s => s.is_completed).length / sts.length) * 100))
+              : (t.progress_rate ?? 0);
             return (
               <div
                 key={t.id}
@@ -120,6 +193,9 @@ export default function GanttTab({ project }) {
         mode={modalMode}
         project={project}
         initial={selectedTask}
+        teamMembers={teamMembers}
+        profiles={profiles}
+        editable={allowCreate}
         onClose={() => setModalOpen(false)}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
