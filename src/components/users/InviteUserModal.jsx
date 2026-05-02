@@ -4,26 +4,28 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import FormField, { inputStyle } from '../ui/FormField';
 import { C, S } from '../../styles/tokens';
+import { useAuth } from '../../contexts/AuthContext';
+import { createInvitation } from '../../api';
 
 /**
  * InviteUserModal — メール招待モーダル（仕様 3-2）。
  *
- * フロー：
+ * フロー（PHASE 3 で実 DB 化）：
  *   1. メールアドレス + 管理者フラグ + 招待メッセージ入力
- *   2. 「招待リンクを発行」 → ダミートークン生成
+ *   2. 「招待リンクを発行」 → invitations コレクションにトークン保存（有効期限 7 日）
  *   3. 招待リンクが画面に表示され、コピー可能
  *   4. 完了で閉じる
+ *
+ * 実際の招待メール送信・トークン消化（アカウント作成）は PHASE 4 で実装。
  */
-function genToken() {
-  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
-}
-
 export default function InviteUserModal({ open, onClose, onInvited }) {
+  const { user } = useAuth();
   const [step, setStep] = useState('input'); // 'input' | 'done'
   const [email, setEmail]     = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError]     = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const [token, setToken]     = useState('');
   const [copied, setCopied]   = useState(false);
@@ -34,6 +36,7 @@ export default function InviteUserModal({ open, onClose, onInvited }) {
     setError('');
     setToken('');
     setCopied(false);
+    setSubmitting(false);
   };
 
   const handleClose = () => {
@@ -41,17 +44,39 @@ export default function InviteUserModal({ open, onClose, onInvited }) {
     onClose?.();
   };
 
-  const handleInvite = (e) => {
+  const handleInvite = async (e) => {
     e?.preventDefault();
     setError('');
     if (!email.trim()) { setError('メールアドレスを入力してください'); return; }
     const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
     if (!ok) { setError('メールアドレスの形式が正しくありません'); return; }
 
-    const newToken = genToken();
-    setToken(newToken);
-    setStep('done');
-    onInvited?.({ email: email.trim(), is_admin: isAdmin, message, token: newToken });
+    setSubmitting(true);
+    try {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7 日後に失効
+
+      const created = await createInvitation({
+        email: email.trim(),
+        is_admin: isAdmin,
+        message: message.trim() || null,
+        invited_by: user?.id || null,
+        expires_at: expiresAt,
+      });
+      setToken(created.token);
+      setStep('done');
+      onInvited?.({
+        id: created.id,
+        email: created.email,
+        is_admin: created.is_admin,
+        message: created.message,
+        token: created.token,
+      });
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || '招待の発行に失敗しました');
+      setSubmitting(false);
+    }
   };
 
   const inviteUrl = `${window.location.origin}${process.env.PUBLIC_URL || ''}/invitations/${token}`;
@@ -74,8 +99,10 @@ export default function InviteUserModal({ open, onClose, onInvited }) {
       footer={
         step === 'input' ? (
           <>
-            <Button variant="secondary" onClick={handleClose}>キャンセル</Button>
-            <Button onClick={handleInvite}>招待リンクを発行</Button>
+            <Button variant="secondary" onClick={handleClose} disabled={submitting}>キャンセル</Button>
+            <Button onClick={handleInvite} disabled={submitting}>
+              {submitting ? '発行中…' : '招待リンクを発行'}
+            </Button>
           </>
         ) : (
           <Button onClick={handleClose}>完了</Button>
@@ -202,7 +229,8 @@ export default function InviteUserModal({ open, onClose, onInvited }) {
             fontSize: '0.75rem',
             color: '#7a5b00',
           }}>
-            ※ ダミー：このリンクはまだ DB に保存されていません。Appwrite 連携時に実招待として動作します。
+            ※ トークンは invitations コレクションに保存されました（有効期限 7 日）。
+            メール送信とアカウント作成フローは PHASE 4（認証本実装）で対応します。
           </div>
         </div>
       )}

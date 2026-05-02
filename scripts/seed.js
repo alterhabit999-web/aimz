@@ -171,6 +171,31 @@ async function seedScheduleParticipants() {
   }
 }
 
+const { ID } = require('node-appwrite');
+
+async function seedNotifications() {
+  console.log(`◆ notifications (${seed.NOTIFICATIONS.length} rows)`);
+  // 通知は docId 固定でないため、再投入時は重複を避けるためいったん user の通知をクリアする
+  // （簡易：listDocuments で u1 の通知を取得して削除）
+  try {
+    const list = await databases.listDocuments(DATABASE_ID, 'notifications', [
+      // 全件削除でも良いが、ユーザーに紐づくものに限定
+    ]);
+    for (const d of list.documents) {
+      try { await databases.deleteDocument(DATABASE_ID, 'notifications', d.$id); } catch (_) {}
+    }
+  } catch (_) {}
+
+  for (const n of seed.NOTIFICATIONS) {
+    try {
+      await databases.createDocument(DATABASE_ID, 'notifications', ID.unique(), n);
+      console.log(`  ✓ ${n.type} ${n.title}`);
+    } catch (e) {
+      console.error(`  ✗ ${n.title}:`, e?.message);
+    }
+  }
+}
+
 // ─────────── メイン ───────────
 const TABLES = {
   profiles:               seedProfiles,
@@ -183,6 +208,7 @@ const TABLES = {
   subtasks:               seedSubtasks,
   schedules:              seedSchedules,
   schedule_participants:  seedScheduleParticipants,
+  notifications:          seedNotifications,
 };
 
 async function main() {

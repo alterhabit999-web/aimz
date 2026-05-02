@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -12,10 +12,12 @@ import { C, S, ICON_SM } from '../styles/tokens';
 import Button from '../components/ui/Button';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  myNotifications,
-  findTask,
-  findProject,
-} from '../data/dummy';
+  listNotificationsForUser,
+  markNotificationRead,
+  markAllNotificationsRead,
+  listProjects,
+  getTask,
+} from '../api';
 import { formatTimeAgo } from '../utils/format';
 
 /**
@@ -48,13 +50,34 @@ export default function NotificationsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // 通知をローカル state に取り込む（dummy データは const なのでミュータブルに扱う）
-  const initial = useMemo(
-    () => myNotifications(user?.id).slice().sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    [user]
-  );
-  const [items, setItems] = useState(initial);
-  const [filter, setFilter] = useState('all');
+  const [items, setItems]     = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const [filter, setFilter]   = useState('all');
+
+  const reload = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [list, projs] = await Promise.all([
+        listNotificationsForUser(user.id, { limit: 100 }),
+        listProjects({ limit: 200 }),
+      ]);
+      setItems(list);
+      setProjects(projs);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || '通知の取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const projectById = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
 
   const visible = useMemo(() => {
     if (filter === 'all')    return items;
@@ -64,21 +87,39 @@ export default function NotificationsPage() {
 
   const unreadCount = items.filter(n => !n.is_read).length;
 
-  const markRead = (id) => {
+  const markRead = async (id) => {
+    // Optimistic update
     setItems(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    try {
+      await markNotificationRead(id, true);
+    } catch (err) {
+      console.error(err);
+      // 失敗したら元に戻す
+      setItems(prev => prev.map(n => n.id === id ? { ...n, is_read: false } : n));
+    }
   };
 
-  const markAllRead = () => {
+  const markAllRead = async () => {
+    const before = items;
     setItems(prev => prev.map(n => ({ ...n, is_read: true })));
+    try {
+      await markAllNotificationsRead(user.id);
+    } catch (err) {
+      console.error(err);
+      setItems(before);
+    }
   };
 
-  const handleClick = (n) => {
-    markRead(n.id);
+  const handleClick = async (n) => {
+    if (!n.is_read) markRead(n.id);
     if (n.related_type === 'project' && n.related_id) {
       navigate(`/projects/${n.related_id}`);
     } else if (n.related_type === 'task' && n.related_id) {
-      const task = findTask(n.related_id);
-      if (task) navigate(`/projects/${task.project_id}`);
+      // タスクの親案件 ID を解決して遷移
+      try {
+        const task = await getTask(n.related_id);
+        if (task?.project_id) navigate(`/projects/${task.project_id}`);
+      } catch (err) { console.error(err); }
     }
   };
 
@@ -156,7 +197,16 @@ export default function NotificationsPage() {
       </div>
 
       {/* 通知リスト */}
-      {visible.length === 0 ? (
+      {loading ? (
+        <Notice>読み込み中...</Notice>
+      ) : error ? (
+        <Notice danger>
+          {error}
+          <div style={{ marginTop: S.s }}>
+            <Button variant="secondary" size="sm" onClick={reload}>再試行</Button>
+          </div>
+        </Notice>
+      ) : visible.length === 0 ? (
         <EmptyState filter={filter} />
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: S.xs }}>
@@ -164,6 +214,7 @@ export default function NotificationsPage() {
             <NotificationItem
               key={n.id}
               notification={n}
+              projectById={projectById}
               onClick={() => handleClick(n)}
               onMarkRead={() => markRead(n.id)}
             />
@@ -174,20 +225,14 @@ export default function NotificationsPage() {
   );
 }
 
-function NotificationItem({ notification, onClick, onMarkRead }) {
+function NotificationItem({ notification, projectById, onClick, onMarkRead }) {
   const Icon = TYPE_ICON[notification.type] || Bell;
   const unread = !notification.is_read;
 
-  // 関連先のサブテキスト
+  // 関連先のサブテキスト：project は projectById で解決、task は親案件まで辿らず簡易表示
   let relatedLabel = null;
-  if (notification.related_type === 'task') {
-    const t = findTask(notification.related_id);
-    if (t) {
-      const p = findProject(t.project_id);
-      relatedLabel = p ? `案件：${p.name}` : null;
-    }
-  } else if (notification.related_type === 'project') {
-    const p = findProject(notification.related_id);
+  if (notification.related_type === 'project' && notification.related_id) {
+    const p = projectById.get(notification.related_id);
     relatedLabel = p ? `案件：${p.name}` : null;
   }
 
@@ -301,6 +346,17 @@ function NotificationItem({ notification, onClick, onMarkRead }) {
         </div>
       </div>
     </li>
+  );
+}
+
+function Notice({ children, danger }) {
+  return (
+    <div style={{
+      padding: S.xl, textAlign: 'center',
+      color: danger ? C.danger : C.textMuted,
+    }}>
+      {children}
+    </div>
   );
 }
 

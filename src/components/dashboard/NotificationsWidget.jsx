@@ -1,22 +1,37 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, Clock, UserPlus, MessageSquare } from 'lucide-react';
 import { C, S } from '../../styles/tokens';
 import Card from '../ui/Card';
 import { useAuth } from '../../contexts/AuthContext';
-import { myNotifications } from '../../data/dummy';
+import { listNotificationsForUser } from '../../api';
 import { formatTimeAgo } from '../../utils/format';
 
 /**
  * NotificationsWidget — お知らせ（アプリ内通知）。
  * 未読件数バッジ付き。クリックで通知ページへ。
- * 仕様 3-10-5。
+ * 仕様 3-10-5。Appwrite から取得。
  */
 export default function NotificationsWidget() {
   const { user } = useAuth();
-  const notifications = myNotifications(user?.id)
-    .slice()
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listNotificationsForUser(user.id, { limit: 20 });
+        if (!cancelled) setNotifications(list);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
@@ -39,7 +54,11 @@ export default function NotificationsWidget() {
         </span>
       ) : null}
     >
-      {notifications.length === 0 ? (
+      {loading ? (
+        <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
+          読み込み中...
+        </p>
+      ) : notifications.length === 0 ? (
         <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
           お知らせはありません
         </p>

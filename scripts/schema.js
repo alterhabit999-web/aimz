@@ -223,12 +223,14 @@ const collections = [
     name: 'Notifications',
     documentSecurity: false,
     attributes: [
-      { key: 'user_id',    type: 'string',  size: 36,  required: true },
-      { key: 'type',       type: 'string',  size: 50,  required: true },
-      { key: 'title',      type: 'string',  size: 200, required: true },
-      { key: 'body',       type: 'string',  size: 1000, required: false },
-      { key: 'related_id', type: 'string',  size: 36,  required: false },
-      { key: 'is_read',    type: 'boolean',            required: false, default: false },
+      { key: 'user_id',      type: 'string',  size: 36,  required: true },
+      { key: 'type',         type: 'string',  size: 50,  required: true },
+      { key: 'title',        type: 'string',  size: 200, required: true },
+      { key: 'body',         type: 'string',  size: 1000, required: false },
+      // クリック時の遷移先を判別する用：'task' | 'project'（v7 で追加）
+      { key: 'related_type', type: 'string',  size: 20,  required: false },
+      { key: 'related_id',   type: 'string',  size: 36,  required: false },
+      { key: 'is_read',      type: 'boolean',            required: false, default: false },
     ],
     indexes: [
       { key: 'user_idx',    type: 'key', attributes: ['user_id'] },

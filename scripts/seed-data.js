@@ -146,6 +146,16 @@ const SUBTASKS = [
   { id: 'st6', task_id: 'tk3', name: 'ルーティング実装',   is_completed: false, assignee_id: 'u1', due_date: '2026-05-10', order_index: 2 },
 ];
 
+// ─────────── notifications ───────────
+// docId 自動採番のため id は不要。投入は seed.js 側で createDocument を直接呼ぶ。
+const NOTIFICATIONS = [
+  { user_id: 'u1', type: 'task_assigned', title: '新しいタスクがアサインされました', body: '「リリース準備」が割り当てられました',     is_read: false, related_type: 'task', related_id: 'tk5' },
+  { user_id: 'u1', type: 'due_reminder',  title: '期限が近づいています',             body: '「フロントエンド実装」の期限まで 3 日',     is_read: false, related_type: 'task', related_id: 'tk3' },
+  { user_id: 'u1', type: 'task_assigned', title: 'タスクが更新されました',           body: '「要件定義」が完了になりました',             is_read: true,  related_type: 'task', related_id: 'tk1' },
+  { user_id: 'u1', type: 'due_reminder',  title: '期限超過があります',               body: '「API 設計レビュー」の期限を 2 日超過',     is_read: false, related_type: 'task', related_id: 'tk10' },
+  { user_id: 'u1', type: 'task_assigned', title: '案件に追加されました',             body: '案件「社内ポータル刷新」の担当者になりました', is_read: true,  related_type: 'project', related_id: 'p1' },
+];
+
 module.exports = {
   PROFILES,
   DEPARTMENTS,
@@ -157,4 +167,5 @@ module.exports = {
   SUBTASKS,
   SCHEDULES,
   SCHEDULE_PARTICIPANTS,
+  NOTIFICATIONS,
 };
