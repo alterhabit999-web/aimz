@@ -4,7 +4,6 @@ import { Calendar, Users as UsersIcon } from 'lucide-react';
 import { C, S } from '../../styles/tokens';
 import Avatar from '../ui/Avatar';
 import Badge, { statusVariant, priorityVariant } from '../ui/Badge';
-import { assigneesOfProject, projectProgress } from '../../data/dummy';
 import { formatShortDate } from '../../utils/format';
 
 const MAX_AVATARS = 4;
@@ -12,11 +11,14 @@ const MAX_AVATARS = 4;
 /**
  * ProjectCard — 案件一覧の 1 カード。
  * クリックで /projects/:id に遷移。
+ *
+ * Props:
+ *   project: { id, name, description, status, priority, start_date, end_date, team_id }
+ *   assignees?: Array<{id, full_name}>  事前解決した担当者
+ *   progress?: number                   タスクの平均進捗（0 なら非表示）
  */
-export default function ProjectCard({ project }) {
+export default function ProjectCard({ project, assignees = [], progress = 0 }) {
   const navigate = useNavigate();
-  const assignees = assigneesOfProject(project);
-  const progress = projectProgress(project.id);
   const visible = assignees.slice(0, MAX_AVATARS);
   const remaining = assignees.length - visible.length;
 

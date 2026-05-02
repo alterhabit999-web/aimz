@@ -50,9 +50,50 @@ const TEAM_MEMBERS = [
   { team_id: 't4', user_id: 'u1', role: 'member' },
 ];
 
+// ─────────── projects ───────────
+// dummy.js の DUMMY_PROJECTS と同じ内容。assignee_ids は project_assignees に分離。
+const PROJECTS = [
+  {
+    id: 'p1', team_id: 't3', name: '社内ポータル刷新',
+    description: '老朽化した社内ポータルサイトを React で刷新する',
+    status: '進行中', priority: '高',
+    start_date: '2026-04-01', end_date: '2026-06-30',
+  },
+  {
+    id: 'p2', team_id: 't3', name: 'スマホアプリ開発',
+    description: 'iOS/Android 両対応のネイティブアプリ',
+    status: '未着手', priority: '中',
+    start_date: '2026-05-15', end_date: '2026-09-30',
+  },
+  {
+    id: 'p3', team_id: 't1', name: '新規顧客開拓キャンペーン',
+    description: 'Q2 の新規顧客獲得施策',
+    status: '進行中', priority: '高',
+    start_date: '2026-04-01', end_date: '2026-06-30',
+  },
+  {
+    id: 'p4', team_id: 't4', name: 'API リファクタリング',
+    description: 'レガシー API の段階的リファクタ',
+    status: '保留', priority: '低',
+    start_date: '2026-04-15', end_date: '2026-07-31',
+  },
+];
+
+// ─────────── project_assignees ───────────
+const PROJECT_ASSIGNEES = [
+  { project_id: 'p1', user_id: 'u1' },
+  { project_id: 'p1', user_id: 'u4' },
+  { project_id: 'p2', user_id: 'u1' },
+  { project_id: 'p3', user_id: 'u3' },
+  { project_id: 'p3', user_id: 'u2' },
+  { project_id: 'p4', user_id: 'u5' },
+];
+
 module.exports = {
   PROFILES,
   DEPARTMENTS,
   TEAMS,
   TEAM_MEMBERS,
+  PROJECTS,
+  PROJECT_ASSIGNEES,
 };

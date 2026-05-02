@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import {
   GanttChartSquare,
@@ -8,7 +8,18 @@ import {
 } from 'lucide-react';
 import { C, S, ICON_SM } from '../styles/tokens';
 import { useAuth } from '../contexts/AuthContext';
-import { findProject, canEditProject } from '../data/dummy';
+import {
+  getProject,
+  listByProject as listAssigneesOfProject,
+  listProfiles,
+  listDepartments,
+  listTeams,
+  listAllTeamMembers,
+  updateProject,
+  setAssignees,
+  deleteAllForProject,
+  deleteProject,
+} from '../api';
 
 import ProjectHeader from '../components/projects/ProjectHeader';
 import ProjectFormModal from '../components/projects/ProjectFormModal';
@@ -20,10 +31,12 @@ import TaskListTab from '../components/projects/tabs/TaskListTab';
 import FilesTab from '../components/projects/tabs/FilesTab';
 
 /**
- * ProjectDetailPage — 案件詳細（仕様 v1.3）。
+ * ProjectDetailPage — 案件詳細（PHASE 3 で実 DB 化）。
  *
  *   - ヘッダー：案件名・ステータス・優先度・期間・所属・担当者・進捗・編集/削除
  *   - タブ：ガント（デフォルト） / カンバン / タスク一覧 / ファイル
+ *
+ * タブ内のタスク機能はまだダミー（tasks 実 DB 化フェーズで連動）。
  */
 const TABS = [
   { id: 'gantt',    label: 'ガント',     Icon: GanttChartSquare },
@@ -36,34 +49,129 @@ export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const project = findProject(projectId);
 
-  const [activeTab, setActiveTab] = useState('gantt');  // デフォルト：ガント
-  const [editOpen, setEditOpen]   = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [project, setProject]           = useState(null);
+  const [assigneeRows, setAssigneeRows] = useState([]);
+  const [profiles, setProfiles]         = useState([]);
+  const [departments, setDepartments]   = useState([]);
+  const [teams, setTeams]               = useState([]);
+  const [teamMembers, setTeamMembers]   = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
+  const [notFound, setNotFound]         = useState(false);
 
-  if (!project) {
+  const [activeTab, setActiveTab]       = useState('gantt');
+  const [editOpen, setEditOpen]         = useState(false);
+  const [deleteOpen, setDeleteOpen]     = useState(false);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [pr, pa, prof, d, t, tm] = await Promise.all([
+        getProject(projectId),
+        listAssigneesOfProject(projectId),
+        listProfiles({ limit: 200 }),
+        listDepartments(),
+        listTeams(),
+        listAllTeamMembers(),
+      ]);
+      if (!pr) {
+        setNotFound(true);
+        return;
+      }
+      setProject(pr);
+      setAssigneeRows(pa);
+      setProfiles(prof);
+      setDepartments(d);
+      setTeams(t);
+      setTeamMembers(tm);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || 'データ取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  // 派生
+  const view = useMemo(() => {
+    if (!project) return null;
+    const profileById = new Map(profiles.map(p => [p.id, p]));
+    const team = teams.find(t => t.id === project.team_id) || null;
+    const department = team ? departments.find(d => d.id === team.department_id) : null;
+    const assignees = assigneeRows
+      .map(a => profileById.get(a.user_id))
+      .filter(Boolean);
+    // ユーザーが該当チームに所属しているか
+    const myMembership = teamMembers.find(m => m.user_id === user?.id && m.team_id === project.team_id);
+    const editable = !!user?.is_admin || !!myMembership;
+    // 自分の所属チーム ID（編集モーダル用）
+    const myTeamIds = teamMembers.filter(m => m.user_id === user?.id).map(m => m.team_id);
+    return {
+      team, department, assignees, editable, myTeamIds,
+      assigneeIds: assigneeRows.map(a => a.user_id),
+    };
+  }, [project, profiles, teams, departments, assigneeRows, teamMembers, user]);
+
+  if (notFound) {
     return <Navigate to="/projects" replace />;
   }
 
-  const editable = canEditProject(user, project);
+  if (loading) {
+    return <Notice>読み込み中...</Notice>;
+  }
+  if (error) {
+    return (
+      <Notice danger>
+        {error}
+      </Notice>
+    );
+  }
+  if (!project || !view) return null;
 
-  const handleEdit = (data) => {
-    console.log('案件編集（ダミー）:', data);
-    alert(`案件「${data.name}」を更新しました（※ダミー、まだ DB に保存されません）`);
+  const handleEdit = async (data) => {
+    await updateProject(data.id, {
+      name: data.name,
+      description: data.description,
+      status: data.status,
+      priority: data.priority,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      // team_id は edit 時 disabled なので変更しない
+    });
+    if (data.assignee_ids) {
+      await setAssignees(data.id, data.assignee_ids);
+    }
+    await reload();
   };
 
-  const handleDelete = () => {
-    console.log('案件削除（ダミー）:', project);
-    alert(`案件「${project.name}」を削除しました（※ダミー、まだ DB から削除されません）`);
-    navigate('/projects');
+  const handleDelete = async () => {
+    try {
+      await deleteAllForProject(project.id);
+      await deleteProject(project.id);
+      // TODO: tasks 実 DB 化後に配下タスク等のカスケード削除を追加
+      navigate('/projects');
+    } catch (err) {
+      console.error(err);
+      alert('削除に失敗しました：' + (err?.message || err));
+    }
   };
+
+  // 編集モーダルの初期値
+  const editInitial = { ...project, assignee_ids: view.assigneeIds };
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
       <ProjectHeader
         project={project}
-        canEdit={editable}
+        team={view.team}
+        department={view.department}
+        assignees={view.assignees}
+        progress={0 /* tasks 実 DB 化フェーズで再計算 */}
+        canEdit={view.editable}
         onEdit={() => setEditOpen(true)}
         onDelete={() => setDeleteOpen(true)}
       />
@@ -107,7 +215,7 @@ export default function ProjectDetailPage() {
         })}
       </div>
 
-      {/* タブ本体 */}
+      {/* タブ本体（タスク機能はまだダミー） */}
       <div>
         {activeTab === 'gantt'  && <GanttTab    project={project} />}
         {activeTab === 'kanban' && <KanbanTab   project={project} />}
@@ -119,7 +227,12 @@ export default function ProjectDetailPage() {
       <ProjectFormModal
         open={editOpen}
         mode="edit"
-        initial={project}
+        initial={editInitial}
+        teams={teams}
+        departments={departments}
+        teamMembers={teamMembers}
+        profiles={profiles}
+        myTeamIds={view.myTeamIds}
         onClose={() => setEditOpen(false)}
         onSubmit={handleEdit}
       />
@@ -138,6 +251,18 @@ export default function ProjectDetailPage() {
         onConfirm={handleDelete}
         onClose={() => setDeleteOpen(false)}
       />
+    </div>
+  );
+}
+
+function Notice({ children, danger }) {
+  return (
+    <div style={{
+      maxWidth: '1280px', margin: '0 auto',
+      padding: S.xl, textAlign: 'center',
+      color: danger ? C.danger : C.textMuted,
+    }}>
+      {children}
     </div>
   );
 }

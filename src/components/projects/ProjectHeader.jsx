@@ -13,12 +13,6 @@ import { C, S, ICON_SM, ICON_MD } from '../../styles/tokens';
 import Avatar from '../ui/Avatar';
 import Badge, { statusVariant, priorityVariant } from '../ui/Badge';
 import Button from '../ui/Button';
-import {
-  findTeam,
-  findDepartment,
-  assigneesOfProject,
-  projectProgress,
-} from '../../data/dummy';
 import { formatShortDate } from '../../utils/format';
 
 /**
@@ -28,13 +22,17 @@ import { formatShortDate } from '../../utils/format';
  *   - 期間・所属（部署 / チーム）・担当者
  *   - 進捗バー
  *   - 編集 / 削除アクション（権限がある場合）
+ *
+ * Props:
+ *   project, canEdit, onEdit, onDelete
+ *   team?:     { id, name }                       事前解決
+ *   department?: { id, name }                     事前解決
+ *   assignees?: Array<{id, full_name}>            事前解決
+ *   progress?: number                             タスク平均進捗
  */
-export default function ProjectHeader({ project, canEdit, onEdit, onDelete }) {
+export default function ProjectHeader({ project, canEdit, onEdit, onDelete, team, department, assignees = [], progress = 0 }) {
   const navigate = useNavigate();
-  const team = findTeam(project.team_id);
-  const dept = team ? findDepartment(team.department_id) : null;
-  const assignees = assigneesOfProject(project);
-  const progress = projectProgress(project.id);
+  const dept = department;
 
   return (
     <div style={{ marginBottom: S.l }}>

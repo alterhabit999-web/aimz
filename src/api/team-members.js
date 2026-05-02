@@ -39,7 +39,7 @@ export async function listByTeam(teamId) {
   return res.documents.map(normalize);
 }
 
-export async function listByUser(userId) {
+export async function listMembershipsByUser(userId) {
   const res = await databases.listDocuments(DATABASE_ID, COL, [
     Query.equal('user_id', userId),
     Query.limit(200),

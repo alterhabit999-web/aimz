@@ -2,13 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import FormField, { inputStyle, textareaStyle, selectStyle } from '../ui/FormField';
-import {
-  DUMMY_TEAMS,
-  membersOfTeam,
-  myTeamIds,
-  visibleTeams,
-  findDepartment,
-} from '../../data/dummy';
 import { useAuth } from '../../contexts/AuthContext';
 import { C, S } from '../../styles/tokens';
 
@@ -22,19 +15,36 @@ const PRIORITY_OPTIONS = ['高', '中', '低'];
  *   open: boolean
  *   mode: 'create' | 'edit'
  *   initial: 既存案件データ（edit 時のみ）
- *   onClose: () => void
- *   onSubmit: (data) => void
+ *     { id, name, description, team_id, status, priority,
+ *       start_date, end_date, assignee_ids }
+ *   teams:        全チーム配列（プルダウン用）
+ *   departments:  全部署配列（チームのラベル用）
+ *   teamMembers:  全 team_members（メンバー候補の絞り込み用）
+ *   profiles:     全プロフィール（メンバー名解決用）
+ *   myTeamIds:    自分の所属チーム ID 配列（自チームに絞る用）
+ *   onClose:  () => void
+ *   onSubmit: (data) => Promise<void>
+ *     data = { id?, name, description, team_id, status, priority,
+ *              start_date, end_date, assignee_ids }
  */
-export default function ProjectFormModal({ open, mode = 'create', initial, onClose, onSubmit }) {
+export default function ProjectFormModal({
+  open, mode = 'create', initial,
+  teams = [], departments = [], teamMembers = [], profiles = [],
+  myTeamIds = [],
+  onClose, onSubmit,
+}) {
   const { user } = useAuth();
   const isEdit = mode === 'edit';
 
-  // チーム選択肢：自分が所属するチームを優先表示。Admin は全チームから選べる。
+  const departmentById = useMemo(() => new Map(departments.map(d => [d.id, d])), [departments]);
+  const profileById    = useMemo(() => new Map(profiles.map(p => [p.id, p])), [profiles]);
+
+  // チーム選択肢：Admin は全チーム、それ以外は自分の所属チーム
   const teamOptions = useMemo(() => {
-    if (user?.is_admin) return DUMMY_TEAMS;
-    const myIds = myTeamIds(user?.id);
-    return visibleTeams(user?.id).filter(t => myIds.includes(t.id));
-  }, [user]);
+    if (user?.is_admin) return teams;
+    const myIdSet = new Set(myTeamIds);
+    return teams.filter(t => myIdSet.has(t.id));
+  }, [user?.is_admin, teams, myTeamIds]);
 
   const [name, setName]               = useState('');
   const [description, setDescription] = useState('');
@@ -45,6 +55,7 @@ export default function ProjectFormModal({ open, mode = 'create', initial, onClo
   const [endDate, setEndDate]         = useState('');
   const [assigneeIds, setAssigneeIds] = useState([]);
   const [error, setError]             = useState('');
+  const [submitting, setSubmitting]   = useState(false);
 
   // open / initial の変化に追随
   useEffect(() => {
@@ -69,13 +80,20 @@ export default function ProjectFormModal({ open, mode = 'create', initial, onClo
       setAssigneeIds([]);
     }
     setError('');
+    setSubmitting(false);
   }, [open, isEdit, initial, teamOptions]);
 
-  // チーム変更時、担当者選択肢が変わるので絞り込み
-  const memberCandidates = useMemo(
-    () => (teamId ? membersOfTeam(teamId) : []),
-    [teamId]
-  );
+  // チーム変更時、担当者選択肢を絞り込む
+  const memberCandidates = useMemo(() => {
+    if (!teamId) return [];
+    return teamMembers
+      .filter(m => m.team_id === teamId)
+      .map(m => {
+        const p = profileById.get(m.user_id);
+        return p ? { ...p, role: m.role } : null;
+      })
+      .filter(Boolean);
+  }, [teamId, teamMembers, profileById]);
 
   // チーム変更時、不正な assignee を取り除く
   useEffect(() => {
@@ -84,7 +102,7 @@ export default function ProjectFormModal({ open, mode = 'create', initial, onClo
     setAssigneeIds(prev => prev.filter(id => validIds.has(id)));
   }, [teamId, memberCandidates]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!name.trim())  { setError('案件名を入力してください'); return; }
     if (!teamId)       { setError('担当チームを選択してください'); return; }
@@ -94,18 +112,25 @@ export default function ProjectFormModal({ open, mode = 'create', initial, onClo
       setError('開始日は終了日より前にしてください');
       return;
     }
-    onSubmit?.({
-      ...(isEdit ? { id: initial.id } : {}),
-      name: name.trim(),
-      description: description.trim(),
-      team_id: teamId,
-      status,
-      priority,
-      start_date: startDate,
-      end_date: endDate,
-      assignee_ids: assigneeIds,
-    });
-    onClose?.();
+    setSubmitting(true);
+    try {
+      await onSubmit?.({
+        ...(isEdit ? { id: initial.id } : {}),
+        name: name.trim(),
+        description: description.trim(),
+        team_id: teamId,
+        status,
+        priority,
+        start_date: startDate,
+        end_date: endDate,
+        assignee_ids: assigneeIds,
+      });
+      onClose?.();
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || '保存に失敗しました');
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -116,8 +141,10 @@ export default function ProjectFormModal({ open, mode = 'create', initial, onClo
       width="600px"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>キャンセル</Button>
-          <Button onClick={handleSubmit}>{isEdit ? '保存する' : '作成する'}</Button>
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>キャンセル</Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? '保存中…' : (isEdit ? '保存する' : '作成する')}
+          </Button>
         </>
       }
     >
@@ -152,7 +179,7 @@ export default function ProjectFormModal({ open, mode = 'create', initial, onClo
           >
             <option value="">選択してください</option>
             {teamOptions.map(t => {
-              const dept = findDepartment(t.department_id);
+              const dept = departmentById.get(t.department_id);
               return (
                 <option key={t.id} value={t.id}>
                   {dept?.name ? `${dept.name} / ` : ''}{t.name}

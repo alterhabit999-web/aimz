@@ -11,7 +11,8 @@ export * from './profiles';
 export * from './departments';
 export * from './teams';
 export * from './team-members';
+export * from './projects';
+export * from './project-assignees';
 // 後続の機能実装で順次追加：
-// export * from './projects';
 // export * from './tasks';
 // ...

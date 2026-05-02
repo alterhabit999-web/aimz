@@ -92,12 +92,40 @@ async function seedTeamMembers() {
   }
 }
 
+// 'YYYY-MM-DD' を Appwrite datetime（ISO8601）に変換
+const toIso = (s) => s ? new Date(`${s}T00:00:00Z`).toISOString() : null;
+
+async function seedProjects() {
+  console.log(`◆ projects (${seed.PROJECTS.length} rows)`);
+  for (const p of seed.PROJECTS) {
+    const { id, ...rest } = p;
+    const data = {
+      ...rest,
+      start_date: toIso(rest.start_date),
+      end_date:   toIso(rest.end_date),
+    };
+    const r = await upsert('projects', id, data);
+    console.log(`  ${r === 'created' ? '✓' : r === 'updated' ? '↻' : '✗'} ${id} ${data.name}`);
+  }
+}
+
+async function seedProjectAssignees() {
+  console.log(`◆ project_assignees (${seed.PROJECT_ASSIGNEES.length} rows)`);
+  for (const a of seed.PROJECT_ASSIGNEES) {
+    const id = `${a.project_id}__${a.user_id}`;
+    const r = await upsert('project_assignees', id, a);
+    console.log(`  ${r === 'created' ? '✓' : r === 'updated' ? '↻' : '✗'} ${id}`);
+  }
+}
+
 // ─────────── メイン ───────────
 const TABLES = {
-  profiles:      seedProfiles,
-  departments:   seedDepartments,
-  teams:         seedTeams,
-  team_members:  seedTeamMembers,
+  profiles:           seedProfiles,
+  departments:        seedDepartments,
+  teams:              seedTeams,
+  team_members:       seedTeamMembers,
+  projects:           seedProjects,
+  project_assignees:  seedProjectAssignees,
 };
 
 async function main() {
