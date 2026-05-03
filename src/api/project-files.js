@@ -15,7 +15,8 @@ import { databases, storage, DATABASE_ID, STORAGE_BUCKET_ID } from '../appwrite'
 import { COLLECTIONS } from './collections';
 
 const COL = COLLECTIONS.PROJECT_FILES;
-export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+// Appwrite Cloud の bucket 上限（50,000,000 バイト = 約 47.7 MiB）に合わせる
+export const MAX_FILE_SIZE = 50_000_000;
 
 const normalize = (doc) => {
   if (!doc) return null;

@@ -43,16 +43,16 @@ const client = new Client()
 const databases = new Databases(client);
 const storage   = new Storage(client);
 
-// ⚠ PHASE 3 の開発中はダミー認証で動かすため、いったん「誰でも可」で開放する。
-//   PHASE 4 で Appwrite Auth を導入した時点で Role.users() に絞り、
-//   さらに各コレクション単位の細かい権限ポリシーを実装する。
-const DEV_OPEN_PERMISSIONS = [
-  Permission.read(Role.any()),
-  Permission.create(Role.any()),
-  Permission.update(Role.any()),
-  Permission.delete(Role.any()),
+// PHASE 4 Step D：認証済みユーザーのみ全操作可。
+//   ダミーログイン（Auth セッション無し）では DB 操作できなくなる。
+//   ※ さらに細かいドキュメント単位の所有権チェックは将来的に追加可能。
+const AUTHED_USERS_PERMISSIONS = [
+  Permission.read(Role.users()),
+  Permission.create(Role.users()),
+  Permission.update(Role.users()),
+  Permission.delete(Role.users()),
 ];
-const COLLECTION_PERMISSIONS = DEV_OPEN_PERMISSIONS;
+const COLLECTION_PERMISSIONS = AUTHED_USERS_PERMISSIONS;
 
 // ─── ユーティリティ ───
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -218,15 +218,15 @@ async function ensureStorageBucket() {
   console.log(`◆ storage bucket: ${STORAGE_BUCKET_ID}`);
   try {
     const bucket = await storage.getBucket(STORAGE_BUCKET_ID);
-    // 開発中：ファイルアップロード/参照を全員に開放
+    // PHASE 4 Step D：認証済みユーザーのみアップロード/参照可能
     await storage.updateBucket(
       STORAGE_BUCKET_ID,
       bucket.name || 'AimZ Files',
-      DEV_OPEN_PERMISSIONS,
+      AUTHED_USERS_PERMISSIONS,
       bucket.fileSecurity ?? false,
       bucket.enabled ?? true,
-      // 50 MB 上限（仕様書 3-7）
-      50 * 1024 * 1024,
+      // 50 MB 上限（仕様書 3-7）— Appwrite の上限が 50,000,000 なので 10 進換算
+      50_000_000,
       // 許可拡張子（仕様書 3-7）
       ['png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx'],
       bucket.compression ?? 'none',
