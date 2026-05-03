@@ -7,6 +7,7 @@ import Avatar from '../components/ui/Avatar';
 import FormField, { inputStyle } from '../components/ui/FormField';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../contexts/AuthContext';
+import { account } from '../appwrite';
 import {
   getProfile,
   updateProfile,
@@ -276,17 +277,19 @@ function ProfileEditor({ profile, onSaved }) {
 }
 
 // ============================================================
-// パスワード変更（PHASE 4 で本実装）
+// パスワード変更（Appwrite Auth に接続）
 // ============================================================
 function PasswordChanger() {
   const [oldPwd, setOldPwd]     = useState('');
   const [newPwd, setNewPwd]     = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [error, setError]       = useState('');
+  const [success, setSuccess]   = useState('');
   const [saving, setSaving]     = useState(false);
 
   const handleChange = async () => {
     setError('');
+    setSuccess('');
     if (!oldPwd || !newPwd || !confirmPwd) {
       setError('すべての項目を入力してください');
       return;
@@ -299,12 +302,30 @@ function PasswordChanger() {
       setError('新しいパスワードと確認用が一致しません');
       return;
     }
+    if (newPwd === oldPwd) {
+      setError('新しいパスワードは現在のものと異なる必要があります');
+      return;
+    }
+
     setSaving(true);
-    // PHASE 4：account.updatePassword(newPwd, oldPwd) を呼ぶ
-    await new Promise(r => setTimeout(r, 300));
-    setSaving(false);
-    setOldPwd(''); setNewPwd(''); setConfirmPwd('');
-    alert('パスワードを変更しました（※ PHASE 4 で実装予定。現状はダミー）');
+    try {
+      // 引数の順序：(newPassword, oldPassword)
+      await account.updatePassword(newPwd, oldPwd);
+      setOldPwd(''); setNewPwd(''); setConfirmPwd('');
+      setSuccess('パスワードを変更しました。次回ログインから新しいパスワードを使用してください。');
+    } catch (err) {
+      console.error(err);
+      // よくあるエラーを日本語化
+      let msg = err?.message || 'パスワードの変更に失敗しました';
+      if (/invalid credentials|password|wrong/i.test(msg)) {
+        msg = '現在のパスワードが正しくありません';
+      } else if (/session/i.test(msg)) {
+        msg = 'セッションが切れています。再ログインしてからお試しください。';
+      }
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -350,17 +371,18 @@ function PasswordChanger() {
         </div>
       )}
 
-      <div style={{
-        marginBottom: S.s,
-        padding: S.s,
-        background: C.warningBg,
-        border: `1px solid ${C.warning}`,
-        borderRadius: '6px',
-        fontSize: '0.75rem',
-        color: '#7a5b00',
-      }}>
-        ※ PHASE 4（認証本実装）で Appwrite Auth に接続します。現状はダミー動作です。
-      </div>
+      {success && (
+        <div style={{
+          padding: S.s,
+          background: '#e8f4ec',
+          color: C.success,
+          borderRadius: '6px',
+          fontSize: '0.857rem',
+          marginBottom: S.s,
+        }}>
+          {success}
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button onClick={handleChange} disabled={saving}>
