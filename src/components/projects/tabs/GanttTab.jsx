@@ -252,6 +252,7 @@ function GanttChart({ tasks, timeline, editable, onRowClick, onUpdate }) {
         display: 'grid',
         gridTemplateColumns: `${NAME_COL_WIDTH}px ${totalWidth}px`,
         minWidth: NAME_COL_WIDTH + totalWidth,
+        position: 'relative', // 今日線を内部に絶対配置するため
       }}>
         {/* ヘッダー：タスク列 */}
         <div style={{
@@ -398,6 +399,8 @@ function GanttChart({ tasks, timeline, editable, onRowClick, onUpdate }) {
 // ============================================================
 function GanttRow({ task, start, totalDays, editable, onClick, onUpdate }) {
   const containerRef = useRef(null);
+  // ドラッグ直後の onClick を抑制するためのフラグ
+  const wasDraggingRef = useRef(false);
 
   // ドラッグ状態
   const [drag, setDrag] = useState(null); // { mode: 'move' | 'left' | 'right', deltaDays, originalStart, originalEnd }
@@ -457,6 +460,11 @@ function GanttRow({ task, start, totalDays, editable, onClick, onUpdate }) {
     if (!drag) return;
     const { shiftStart, shiftEnd } = drag;
     setDrag(null);
+    // 動きがあったらドラッグ扱い → 直後の onClick を 1 回抑制
+    if (shiftStart !== 0 || shiftEnd !== 0) {
+      wasDraggingRef.current = true;
+      setTimeout(() => { wasDraggingRef.current = false; }, 0);
+    }
     if (shiftStart === 0 && shiftEnd === 0) return;
     const newStart = dateAddDays(taskStart, shiftStart);
     const newEnd   = dateAddDays(taskEnd,   shiftEnd);
@@ -479,7 +487,10 @@ function GanttRow({ task, start, totalDays, editable, onClick, onUpdate }) {
         background: C.surface,
         cursor: hasBar ? 'pointer' : 'default',
       }}
-      onClick={() => !drag && onClick?.()}
+      onClick={() => {
+        if (drag || wasDraggingRef.current) return;
+        onClick?.();
+      }}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={() => setDrag(null)}
