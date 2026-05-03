@@ -9,6 +9,10 @@
  */
 
 // ─────────── profiles ───────────
+// ⚠ u1 のメールは「あなた専用のメール」に対応している。シード再投入で
+//   yamada@example.com に戻ってしまうため、再投入後は次を実行すること：
+//     npm run sync:profile-emails
+//   （Appwrite Auth のメールを正として profiles を更新する）
 const PROFILES = [
   { id: 'u1', full_name: '山田 太郎', email: 'yamada@example.com',    is_admin: true,  avatar_url: null },
   { id: 'u2', full_name: '佐藤 花子', email: 'sato@example.com',      is_admin: false, avatar_url: null },
