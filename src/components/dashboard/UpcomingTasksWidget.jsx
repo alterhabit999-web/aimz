@@ -4,22 +4,26 @@ import { Clock, AlertCircle } from 'lucide-react';
 import { C, S } from '../../styles/tokens';
 import Card from '../ui/Card';
 import Badge, { priorityVariant } from '../ui/Badge';
-import { useAuth } from '../../contexts/AuthContext';
-import { upcomingTasks, findProject, daysUntil } from '../../data/dummy';
 import { formatDueRelative, formatShortDate } from '../../utils/format';
 
 /**
  * UpcomingTasksWidget — 期限が迫る自分のタスク一覧。
  * 期限超過 + 今後7日以内を期限が近い順に表示。
  * 仕様 3-10-2。
+ *
+ * Props:
+ *   tasks: Array<{ id, name, project_id, due_date, priority, days, projectName }>
+ *     呼び出し側で「自分の未完了タスク・期限7日以内」に絞り、days と projectName を組み立てる
+ *   loading: boolean
  */
-export default function UpcomingTasksWidget() {
-  const { user } = useAuth();
-  const tasks = upcomingTasks(user?.id, 7);
-
+export default function UpcomingTasksWidget({ tasks = [], loading = false }) {
   return (
     <Card title="期限が迫るタスク" Icon={Clock}>
-      {tasks.length === 0 ? (
+      {loading ? (
+        <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
+          読み込み中...
+        </p>
+      ) : tasks.length === 0 ? (
         <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
           1週間以内に期限のタスクはありません
         </p>
@@ -33,14 +37,12 @@ export default function UpcomingTasksWidget() {
 }
 
 function TaskRow({ task }) {
-  const project = findProject(task.project_id);
-  const days = daysUntil(task.due_date);
+  const days = task.days;
   const isOverdue = days < 0;
   const isUrgent = !isOverdue && days <= 3;
 
   const dueColor = isOverdue ? C.danger : isUrgent ? C.orange : C.textSub;
-  const dueIcon  = isOverdue ? AlertCircle : Clock;
-  const DueIcon  = dueIcon;
+  const DueIcon  = isOverdue ? AlertCircle : Clock;
 
   return (
     <li>
@@ -72,7 +74,7 @@ function TaskRow({ task }) {
             {task.name}
           </div>
           <div style={{ fontSize: '0.75rem', color: C.textMuted, marginTop: '2px' }}>
-            {project?.name}
+            {task.projectName || '—'}
           </div>
         </div>
 

@@ -4,30 +4,35 @@ import { CheckSquare } from 'lucide-react';
 import { C, S } from '../../styles/tokens';
 import Card from '../ui/Card';
 import Badge, { statusVariant, priorityVariant } from '../ui/Badge';
-import { useAuth } from '../../contexts/AuthContext';
-import { myTasksByStatus, findProject } from '../../data/dummy';
 
 const STATUS_ORDER = ['進行中', '未着手', '完了'];
 
 /**
  * MyTasksWidget — 自分の担当タスクをステータス別にグルーピング表示。
  * 仕様 3-10-3。
+ *
+ * Props:
+ *   groups: { '未着手': [...], '進行中': [...], '完了': [...] }
+ *     各タスクに projectName を含めること
+ *   loading: boolean
  */
-export default function MyTasksWidget() {
-  const { user } = useAuth();
-  const groups = myTasksByStatus(user?.id);
-  const total = STATUS_ORDER.reduce((acc, s) => acc + groups[s].length, 0);
+export default function MyTasksWidget({ groups = {}, loading = false }) {
+  const total = STATUS_ORDER.reduce((acc, s) => acc + (groups[s]?.length || 0), 0);
 
   return (
     <Card title="自分の担当タスク" Icon={CheckSquare}>
-      {total === 0 ? (
+      {loading ? (
+        <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
+          読み込み中...
+        </p>
+      ) : total === 0 ? (
         <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
           担当タスクはありません
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: S.m }}>
           {STATUS_ORDER.map(status => {
-            const tasks = groups[status];
+            const tasks = groups[status] || [];
             if (tasks.length === 0) return null;
             return (
               <section key={status}>
@@ -60,7 +65,6 @@ export default function MyTasksWidget() {
 }
 
 function TaskRow({ task }) {
-  const project = findProject(task.project_id);
   return (
     <li>
       <Link
@@ -91,7 +95,7 @@ function TaskRow({ task }) {
             {task.name}
           </div>
           <div style={{ fontSize: '0.75rem', color: C.textMuted, marginTop: '1px' }}>
-            {project?.name}
+            {task.projectName || '—'}
           </div>
         </div>
         {task.priority && (

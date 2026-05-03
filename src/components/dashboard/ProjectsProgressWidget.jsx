@@ -4,21 +4,25 @@ import { FolderOpen } from 'lucide-react';
 import { C, S } from '../../styles/tokens';
 import Card from '../ui/Card';
 import Badge, { statusVariant } from '../ui/Badge';
-import { useAuth } from '../../contexts/AuthContext';
-import { myProjects, projectProgress } from '../../data/dummy';
 import { formatShortDate } from '../../utils/format';
 
 /**
  * ProjectsProgressWidget — 自分のチームの案件進捗サマリー。
  * 仕様 3-10-4。
+ *
+ * Props:
+ *   projects: Array<{ id, name, status, start_date, end_date, progress }>
+ *     呼び出し側で「自分の所属チームの案件 + 進捗」を組み立てて渡す
+ *   loading: boolean
  */
-export default function ProjectsProgressWidget() {
-  const { user } = useAuth();
-  const projects = myProjects(user?.id);
-
+export default function ProjectsProgressWidget({ projects = [], loading = false }) {
   return (
     <Card title="担当プロジェクト" Icon={FolderOpen}>
-      {projects.length === 0 ? (
+      {loading ? (
+        <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
+          読み込み中...
+        </p>
+      ) : projects.length === 0 ? (
         <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
           所属チームの案件はありません
         </p>
@@ -32,7 +36,7 @@ export default function ProjectsProgressWidget() {
 }
 
 function ProjectRow({ project }) {
-  const progress = projectProgress(project.id);
+  const progress = project.progress || 0;
 
   return (
     <li>
