@@ -1,14 +1,33 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { account } from '../appwrite';
+import { getProfile } from '../api/profiles';
 import { findUser, DUMMY_USERS } from '../data/dummy';
 
 /**
  * AuthContext — ログイン中のユーザー情報・ログイン/ログアウト関数を提供。
  *
- * 開発初期は Appwrite Auth が未設定でも動くよう、ダミーログインも併用。
- * Appwrite で実ユーザーを作成すれば、実ログインに切り替わる。
+ * PHASE 4：Appwrite Auth セッション + profiles コレクションを統合。
+ *   - ログイン直後に getProfile(user.$id) でプロフィールを取得して user に統合
+ *   - profiles に未登録なら、Auth の name / email を使うフォールバック
+ *
+ * ダミーログインも開発フォールバックとして残す（Q3=B：PHASE 5 デプロイ前に撤去予定）。
  */
 const AuthContext = createContext(null);
+
+/** Appwrite Auth の me + profiles を統合して UI 用 user を作る */
+async function buildUser(me) {
+  const profile = await getProfile(me.$id);
+  return {
+    id: me.$id,
+    email: me.email || profile?.email || null,
+    full_name: profile?.full_name || me.name || me.email || '',
+    avatar_url: profile?.avatar_url || null,
+    is_admin: profile?.is_admin ?? false,
+    is_active: profile?.is_active ?? true,
+    // 元の Auth オブジェクトも保持（labels 等を参照したい場合）
+    _auth: me,
+  };
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -20,15 +39,8 @@ export function AuthProvider({ children }) {
     (async () => {
       try {
         const me = await account.get();
-        if (!cancelled) {
-          // Appwrite のユーザーを我々の profile 形式に変換（DB 連携前の暫定）
-          setUser({
-            id: me.$id,
-            full_name: me.name || me.email,
-            email: me.email,
-            is_admin: me.labels?.includes('admin') ?? false,
-          });
-        }
+        const merged = await buildUser(me);
+        if (!cancelled) setUser(merged);
       } catch {
         if (!cancelled) setUser(null);
       } finally {
@@ -38,19 +50,26 @@ export function AuthProvider({ children }) {
     return () => { cancelled = true; };
   }, []);
 
+  // 自分のプロフィールを再取得（マイページ編集後に呼び出して反映）
+  const refresh = useCallback(async () => {
+    try {
+      const me = await account.get();
+      const merged = await buildUser(me);
+      setUser(merged);
+    } catch (err) {
+      console.error('refresh failed:', err);
+    }
+  }, []);
+
   // ログイン（Appwrite Email + Password）
   const login = useCallback(async (email, password) => {
     await account.createEmailPasswordSession(email, password);
     const me = await account.get();
-    setUser({
-      id: me.$id,
-      full_name: me.name || me.email,
-      email: me.email,
-      is_admin: me.labels?.includes('admin') ?? false,
-    });
+    const merged = await buildUser(me);
+    setUser(merged);
   }, []);
 
-  // 開発用：ダミーログイン（Appwrite に実ユーザーを作る前に UI 確認するため）
+  // 開発用：ダミーログイン（Q3=B：PHASE 5 デプロイ前に撤去予定）
   const loginAsDummy = useCallback((userId = 'u1') => {
     const dummy = findUser(userId) || DUMMY_USERS[0];
     setUser(dummy);
@@ -67,7 +86,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginAsDummy, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, loginAsDummy, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

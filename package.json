@@ -27,7 +27,8 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build",
     "setup:appwrite": "node scripts/setup-appwrite.js",
-    "seed:appwrite": "node scripts/seed.js"
+    "seed:appwrite": "node scripts/seed.js",
+    "seed:auth-users": "node scripts/seed-auth-users.js"
   },
   "eslintConfig": {
     "extends": [

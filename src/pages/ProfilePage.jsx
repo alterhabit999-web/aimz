@@ -26,7 +26,7 @@ import {
  *   4. ログアウト
  */
 export default function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, refresh } = useAuth();
 
   // ─── 取得データ ───
   const [profile, setProfile]         = useState(null);
@@ -162,7 +162,7 @@ export default function ProfilePage() {
 
       {/* プロフィール編集 */}
       <div style={{ marginTop: S.m }}>
-        <ProfileEditor profile={displayUser} onSaved={reload} />
+        <ProfileEditor profile={displayUser} onSaved={async () => { await reload(); await refresh(); }} />
       </div>
 
       {/* パスワード変更（PHASE 4 で本実装） */}
