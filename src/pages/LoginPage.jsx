@@ -6,11 +6,10 @@ import { useAuth } from '../contexts/AuthContext';
 import Button from '../components/ui/Button';
 
 /**
- * LoginPage — メール + パスワードでログイン。
- * 開発初期用に「ダミーログイン」ボタンも併設。
+ * LoginPage — メール + パスワードでログイン（Appwrite Auth）。
  */
 export default function LoginPage() {
-  const { user, login, loginAsDummy } = useAuth();
+  const { user, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -33,15 +32,15 @@ export default function LoginPage() {
       await login(email, password);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err?.message || 'ログインに失敗しました');
+      // メッセージを日本語化
+      let msg = err?.message || 'ログインに失敗しました';
+      if (/invalid credentials|wrong/i.test(msg)) {
+        msg = 'メールアドレスまたはパスワードが正しくありません';
+      }
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleDummy = () => {
-    loginAsDummy('u1');
-    navigate('/dashboard', { replace: true });
   };
 
   const inputStyle = {
@@ -140,24 +139,14 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        {/* 開発用ダミーログイン */}
-        <div style={{
+        <p style={{
+          color: C.textMuted,
+          fontSize: '0.75rem',
+          textAlign: 'center',
           marginTop: S.l,
-          paddingTop: S.l,
-          borderTop: `1px solid ${C.border}`,
         }}>
-          <p style={{
-            color: C.textMuted,
-            fontSize: '0.75rem',
-            textAlign: 'center',
-            marginBottom: S.s,
-          }}>
-            開発用：Appwrite ユーザー未作成でも UI を確認できます
-          </p>
-          <Button variant="secondary" onClick={handleDummy} style={{ width: '100%' }}>
-            ダミーログイン（管理者）
-          </Button>
-        </div>
+          管理者から招待リンクを受け取った方は、リンクからアカウントを作成してください。
+        </p>
       </div>
     </div>
   );

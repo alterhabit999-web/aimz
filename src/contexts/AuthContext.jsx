@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { account } from '../appwrite';
 import { getProfile } from '../api/profiles';
-import { findUser, DUMMY_USERS } from '../data/dummy';
 
 /**
  * AuthContext — ログイン中のユーザー情報・ログイン/ログアウト関数を提供。
@@ -10,7 +9,7 @@ import { findUser, DUMMY_USERS } from '../data/dummy';
  *   - ログイン直後に getProfile(user.$id) でプロフィールを取得して user に統合
  *   - profiles に未登録なら、Auth の name / email を使うフォールバック
  *
- * ダミーログインも開発フォールバックとして残す（Q3=B：PHASE 5 デプロイ前に撤去予定）。
+ * Step E でダミーログインを撤去（Q3=B）。
  */
 const AuthContext = createContext(null);
 
@@ -69,24 +68,18 @@ export function AuthProvider({ children }) {
     setUser(merged);
   }, []);
 
-  // 開発用：ダミーログイン（Q3=B：PHASE 5 デプロイ前に撤去予定）
-  const loginAsDummy = useCallback((userId = 'u1') => {
-    const dummy = findUser(userId) || DUMMY_USERS[0];
-    setUser(dummy);
-  }, []);
-
   // ログアウト
   const logout = useCallback(async () => {
     try {
       await account.deleteSession('current');
     } catch {
-      // ダミーログイン時は Appwrite セッションがないので無視
+      // セッションが既に切れている場合は無視
     }
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginAsDummy, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );
