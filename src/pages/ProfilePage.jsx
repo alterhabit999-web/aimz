@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { User, Lock, LogOut, Image as ImageIcon, Crown, Shield } from 'lucide-react';
 import { C, S } from '../styles/tokens';
 import Card from '../components/ui/Card';
@@ -8,28 +8,104 @@ import FormField, { inputStyle } from '../components/ui/FormField';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  myDepartments,
-  myTeams,
-  isTeamLeader,
-} from '../data/dummy';
+  getProfile,
+  updateProfile,
+  listAllTeamMembers,
+  listTeams,
+  listDepartments,
+} from '../api';
 
 /**
  * ProfilePage — マイページ（仕様 3-1：プロフィール編集 + パスワード変更）。
+ * PHASE 3 で実 DB 化。プロフィール編集は updateProfile() に接続。
  *
  * 構成（縦並び）：
- *   1. プロフィールカード（アバター、氏名、メール、ロール表示、所属）
+ *   1. プロフィールカード（アバター、氏名、メール、ロール、所属）
  *   2. プロフィール編集（氏名・アバター URL）
- *   3. パスワード変更
+ *   3. パスワード変更（PHASE 4 で本実装、現状はダミー）
  *   4. ログアウト
  */
 export default function ProfilePage() {
   const { user, logout } = useAuth();
 
+  // ─── 取得データ ───
+  const [profile, setProfile]         = useState(null);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [teams, setTeams]             = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
+
+  const reload = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [p, tm, t, d] = await Promise.all([
+        getProfile(user.id),
+        listAllTeamMembers(),
+        listTeams(),
+        listDepartments(),
+      ]);
+      setProfile(p);
+      setTeamMembers(tm);
+      setTeams(t);
+      setDepartments(d);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || 'プロフィール情報の取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  // ─── 派生：自分の所属部署・チーム・リーダー判定 ───
+  const view = useMemo(() => {
+    if (!user?.id) return { departments: [], teams: [], isLeader: false };
+    const myMemberships = teamMembers.filter(m => m.user_id === user.id);
+    const myTeamIds = new Set(myMemberships.map(m => m.team_id));
+    const myTeams = teams.filter(t => myTeamIds.has(t.id));
+    const myDeptIds = new Set(myTeams.map(t => t.department_id));
+    const myDepts = departments.filter(d => myDeptIds.has(d.id));
+    const isLeader = myMemberships.some(m => m.role === 'leader');
+    return { departments: myDepts, teams: myTeams, isLeader };
+  }, [user?.id, teamMembers, teams, departments]);
+
   if (!user) return null;
 
-  const departments = myDepartments(user.id);
-  const teams = myTeams(user.id);
-  const leader = isTeamLeader(user.id);
+  if (loading) {
+    return (
+      <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: C.text, margin: 0, marginBottom: S.l }}>
+          マイページ
+        </h1>
+        <div style={{ padding: S.xl, textAlign: 'center', color: C.textMuted }}>
+          読み込み中...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: C.text, margin: 0, marginBottom: S.l }}>
+          マイページ
+        </h1>
+        <div style={{ padding: S.xl, textAlign: 'center', color: C.danger }}>
+          {error}
+          <div style={{ marginTop: S.s }}>
+            <Button variant="secondary" size="sm" onClick={reload}>再試行</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 表示は profile（最新）を優先、無ければ user（AuthContext のフォールバック）
+  const displayUser = profile || user;
 
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
@@ -40,22 +116,20 @@ export default function ProfilePage() {
       {/* プロフィールサマリー */}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: S.m }}>
-          <Avatar name={user.full_name} src={user.avatar_url} size={64} />
+          <Avatar name={displayUser.full_name} src={displayUser.avatar_url} size={64} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: '1.2rem',
-              fontWeight: 700,
-              color: C.text,
-            }}>
-              {user.full_name}
+            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: C.text }}>
+              {displayUser.full_name}
             </div>
             <div style={{ fontSize: '0.857rem', color: C.textSub, marginTop: '2px' }}>
-              {user.email}
+              {displayUser.email}
             </div>
             <div style={{ display: 'flex', gap: S.xs, marginTop: S.xs, flexWrap: 'wrap' }}>
-              {user.is_admin && <RoleBadge Icon={Shield} label="管理者" color={C.accent} />}
-              {leader && <RoleBadge Icon={Crown} label="チームリーダー" color={C.orange} />}
-              {!user.is_admin && !leader && <RoleBadge Icon={User} label="メンバー" color={C.textSub} />}
+              {displayUser.is_admin && <RoleBadge Icon={Shield} label="管理者" color={C.accent} />}
+              {view.isLeader && <RoleBadge Icon={Crown} label="チームリーダー" color={C.orange} />}
+              {!displayUser.is_admin && !view.isLeader && (
+                <RoleBadge Icon={User} label="メンバー" color={C.textSub} />
+              )}
             </div>
           </div>
         </div>
@@ -70,17 +144,17 @@ export default function ProfilePage() {
           gap: S.m,
         }}>
           <Meta label="所属部署">
-            {departments.length === 0 ? (
+            {view.departments.length === 0 ? (
               <span style={{ color: C.textMuted }}>未所属</span>
             ) : (
-              departments.map(d => d.name).join(' / ')
+              view.departments.map(d => d.name).join(' / ')
             )}
           </Meta>
           <Meta label="所属チーム">
-            {teams.length === 0 ? (
+            {view.teams.length === 0 ? (
               <span style={{ color: C.textMuted }}>未所属</span>
             ) : (
-              teams.map(t => t.name).join(' / ')
+              view.teams.map(t => t.name).join(' / ')
             )}
           </Meta>
         </div>
@@ -88,10 +162,10 @@ export default function ProfilePage() {
 
       {/* プロフィール編集 */}
       <div style={{ marginTop: S.m }}>
-        <ProfileEditor user={user} />
+        <ProfileEditor profile={displayUser} onSaved={reload} />
       </div>
 
-      {/* パスワード変更 */}
+      {/* パスワード変更（PHASE 4 で本実装） */}
       <div style={{ marginTop: S.m }}>
         <PasswordChanger />
       </div>
@@ -107,20 +181,36 @@ export default function ProfilePage() {
 // ============================================================
 // プロフィール編集
 // ============================================================
-function ProfileEditor({ user }) {
-  const [name, setName]           = useState(user.full_name || '');
-  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '');
+function ProfileEditor({ profile, onSaved }) {
+  const [name, setName]           = useState(profile.full_name || '');
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url || '');
   const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
 
-  const dirty = name !== user.full_name || avatarUrl !== (user.avatar_url || '');
+  // 親の profile が変わったら追随（reload 後）
+  useEffect(() => {
+    setName(profile.full_name || '');
+    setAvatarUrl(profile.avatar_url || '');
+  }, [profile.full_name, profile.avatar_url]);
+
+  const dirty = name !== (profile.full_name || '') || avatarUrl !== (profile.avatar_url || '');
 
   const handleSave = async () => {
     if (!name.trim()) return;
+    setError('');
     setSaving(true);
-    // TODO: Appwrite 連携時に account.updateName 等を呼ぶ
-    await new Promise(r => setTimeout(r, 300));
-    setSaving(false);
-    alert('プロフィールを更新しました（※ダミー、まだ DB に保存されません）');
+    try {
+      await updateProfile(profile.id, {
+        full_name: name.trim(),
+        avatar_url: avatarUrl.trim() || null,
+      });
+      await onSaved?.();
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || '保存に失敗しました');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -163,6 +253,19 @@ function ProfileEditor({ user }) {
         画像アップロードは Appwrite Storage 連携時に実装します
       </div>
 
+      {error && (
+        <div style={{
+          marginTop: S.s,
+          padding: S.s,
+          background: C.dangerBg,
+          color: C.danger,
+          borderRadius: '6px',
+          fontSize: '0.857rem',
+        }}>
+          {error}
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: S.m }}>
         <Button onClick={handleSave} disabled={!dirty || saving || !name.trim()}>
           {saving ? '保存中…' : '保存する'}
@@ -173,7 +276,7 @@ function ProfileEditor({ user }) {
 }
 
 // ============================================================
-// パスワード変更
+// パスワード変更（PHASE 4 で本実装）
 // ============================================================
 function PasswordChanger() {
   const [oldPwd, setOldPwd]     = useState('');
@@ -197,11 +300,11 @@ function PasswordChanger() {
       return;
     }
     setSaving(true);
-    // TODO: Appwrite 連携時に account.updatePassword(newPwd, oldPwd) を呼ぶ
+    // PHASE 4：account.updatePassword(newPwd, oldPwd) を呼ぶ
     await new Promise(r => setTimeout(r, 300));
     setSaving(false);
     setOldPwd(''); setNewPwd(''); setConfirmPwd('');
-    alert('パスワードを変更しました（※ダミー、まだ DB には反映されません）');
+    alert('パスワードを変更しました（※ PHASE 4 で実装予定。現状はダミー）');
   };
 
   return (
@@ -246,6 +349,18 @@ function PasswordChanger() {
           {error}
         </div>
       )}
+
+      <div style={{
+        marginBottom: S.s,
+        padding: S.s,
+        background: C.warningBg,
+        border: `1px solid ${C.warning}`,
+        borderRadius: '6px',
+        fontSize: '0.75rem',
+        color: '#7a5b00',
+      }}>
+        ※ PHASE 4（認証本実装）で Appwrite Auth に接続します。現状はダミー動作です。
+      </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button onClick={handleChange} disabled={saving}>
@@ -338,4 +453,3 @@ function Meta({ label, children }) {
     </div>
   );
 }
-
