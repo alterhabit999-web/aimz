@@ -8,6 +8,24 @@
     <title>AimZ</title>
 
     <!--
+      SPA GitHub Pages リダイレクト復元（rafgraph/spa-github-pages 方式）
+      404.html で書き換えられた `/?/path` を本来のパスに戻す。
+      React Router がマウントされる前に実行する必要があるため、ここに置く。
+    -->
+    <script>
+      (function(l) {
+        if (l.search[1] === '/' ) {
+          var decoded = l.search.slice(1).split('&').map(function(s) {
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null,
+            l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location))
+    </script>
+
+    <!--
       游ゴシック Medium を font-weight:400 にマッピング（SmartHR デザインシステム推奨）
       Windows での表示品質を確保するための設定
     -->

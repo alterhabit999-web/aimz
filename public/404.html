@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>AimZ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // ───────────────────────────────────────────────────
+    // SPA GitHub Pages リダイレクト（rafgraph/spa-github-pages 方式）
+    // ───────────────────────────────────────────────────
+    // GitHub Pages は SPA の任意パス直接アクセスを 404 で返すため、
+    //   /aimz/dashboard などにアクセスされたら、
+    //     /aimz/?/dashboard
+    //   の形に書き換えて index.html にリダイレクトする。
+    //   index.html 内の復元スクリプトで本来のパスに戻す。
+    //
+    // pathSegmentsToKeep = 1 → 最初の `/aimz` セグメントを保持する
+    // ───────────────────────────────────────────────────
+    var pathSegmentsToKeep = 1;
+
+    var l = window.location;
+    l.replace(
+      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+      l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+      l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+      (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+      l.hash
+    );
+  </script>
+</head>
+<body>
+  <noscript>
+    <p>このアプリは JavaScript が必要です。</p>
+  </noscript>
+</body>
+</html>
