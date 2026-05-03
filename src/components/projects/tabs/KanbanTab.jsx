@@ -16,6 +16,7 @@ import {
   deleteTask,
   setSubtasksForTask,
   deleteAllSubtasksForTask,
+  syncProjectStatusFromTasks,
 } from '../../../api';
 
 /**
@@ -102,12 +103,14 @@ export default function KanbanTab({ project }) {
       });
       if (subtasks?.length) await setSubtasksForTask(created.id, subtasks);
     }
+    await syncProjectStatusFromTasks(project.id);
     await reload();
   };
   const handleDelete = async (task) => {
     if (!task) return;
     await deleteAllSubtasksForTask(task.id);
     await deleteTask(task.id);
+    await syncProjectStatusFromTasks(project.id);
     await reload();
   };
 

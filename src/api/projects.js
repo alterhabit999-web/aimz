@@ -108,3 +108,38 @@ export async function updateProject(id, patch) {
 export async function deleteProject(id) {
   return databases.deleteDocument(DATABASE_ID, COL, id);
 }
+
+/**
+ * プロジェクトのステータスをタスクの状態から自動更新する。
+ *
+ * ルール：
+ *   - 「未着手」のプロジェクトで、タスクが 1 つでも「進行中」または「完了」になっていたら
+ *     プロジェクトを「進行中」に変更する。
+ *   - 「進行中」「完了」「保留」のプロジェクトは触らない（手動設定を尊重）。
+ *   - 完了化は手動のまま（全タスク完了でも自動で完了にはしない）。
+ *
+ * 各タスクの create / update / delete のあとに呼び出す。
+ */
+export async function syncProjectStatusFromTasks(projectId, tasksOfProject) {
+  if (!projectId) return null;
+
+  const project = await getProject(projectId);
+  if (!project) return null;
+
+  // 自動変更の対象は「未着手」のみ
+  if (project.status !== '未着手') return project;
+
+  // tasks 配列が渡されていなければ取得
+  let tasks = tasksOfProject;
+  if (!tasks) {
+    // 動的 import で循環依存を回避
+    const { listTasksByProject } = await import('./tasks');
+    tasks = await listTasksByProject(projectId);
+  }
+
+  const hasActive = tasks.some(t => t.status === '進行中' || t.status === '完了');
+  if (hasActive) {
+    return updateProject(projectId, { status: '進行中' });
+  }
+  return project;
+}

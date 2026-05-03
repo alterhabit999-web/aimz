@@ -16,6 +16,7 @@ import {
   deleteTask,
   setSubtasksForTask,
   deleteAllSubtasksForTask,
+  syncProjectStatusFromTasks,
 } from '../../../api';
 
 /**
@@ -92,6 +93,7 @@ export default function GanttTab({ project }) {
       });
       if (subtasks?.length) await setSubtasksForTask(created.id, subtasks);
     }
+    await syncProjectStatusFromTasks(project.id);
     await reload();
   };
 
@@ -99,6 +101,7 @@ export default function GanttTab({ project }) {
     if (!task) return;
     await deleteAllSubtasksForTask(task.id);
     await deleteTask(task.id);
+    await syncProjectStatusFromTasks(project.id);
     await reload();
   };
 
