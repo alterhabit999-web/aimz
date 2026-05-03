@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Building2,
@@ -14,21 +14,17 @@ import Card from '../../components/ui/Card';
 import Avatar from '../../components/ui/Avatar';
 import Badge, { priorityVariant } from '../../components/ui/Badge';
 import {
-  DUMMY_DEPARTMENTS,
-  DUMMY_TEAMS,
-  DUMMY_USERS,
-  findDepartment,
-  findProject,
-  findUser,
-  teamProjectSummary,
-  memberWorkloads,
-  overdueTasks,
-} from '../../data/dummy';
+  listDepartments,
+  listTeams,
+  listProfiles,
+  listProjects,
+  listTasks,
+} from '../../api';
 import { formatShortDate } from '../../utils/format';
-import { daysUntil } from '../../data/dummy';
 
 /**
  * AdminDashboardPage — 管理者ダッシュボード（仕様 3-14）。
+ * PHASE 3 で実 DB 化。
  *
  * 構成：
  *   - 上段：サマリー数値（部署 / チーム / ユーザー / 期限超過タスク）
@@ -36,9 +32,125 @@ import { daysUntil } from '../../data/dummy';
  *   - 下段：期限超過タスク一覧
  *   - 末尾：管理用画面へのショートカット
  */
+
+// 期限までの日数（'YYYY-MM-DD' 想定）
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const due = new Date(dateStr);
+  due.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 export default function AdminDashboardPage() {
-  const overdues = overdueTasks();
-  const workloads = memberWorkloads();
+  const [departments, setDepartments] = useState([]);
+  const [teams, setTeams]             = useState([]);
+  const [profiles, setProfiles]       = useState([]);
+  const [projects, setProjects]       = useState([]);
+  const [tasks, setTasks]             = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [d, t, p, pr, tk] = await Promise.all([
+          listDepartments(),
+          listTeams(),
+          listProfiles({ limit: 200 }),
+          listProjects({ limit: 200 }),
+          listTasks({ limit: 500 }),
+        ]);
+        if (!cancelled) {
+          setDepartments(d);
+          setTeams(t);
+          setProfiles(p);
+          setProjects(pr);
+          setTasks(tk);
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) setError(err?.message || 'データ取得に失敗しました');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ─── 派生データ ───
+  const view = useMemo(() => {
+    const departmentById = new Map(departments.map(d => [d.id, d]));
+    const projectById    = new Map(projects.map(p => [p.id, p]));
+    const profileById    = new Map(profiles.map(p => [p.id, p]));
+
+    // タスクを project_id でグルーピング
+    const tasksByProject = new Map();
+    for (const t of tasks) {
+      const arr = tasksByProject.get(t.project_id) || [];
+      arr.push(t);
+      tasksByProject.set(t.project_id, arr);
+    }
+
+    // 案件ごとの平均進捗
+    const projectProgress = (projectId) => {
+      const arr = tasksByProject.get(projectId) || [];
+      if (arr.length === 0) return 0;
+      return Math.round(arr.reduce((acc, t) => acc + (t.progress_rate || 0), 0) / arr.length);
+    };
+
+    // チームごとの案件サマリー（dummy.teamProjectSummary 相当）
+    const teamSummaries = teams.map(t => {
+      const teamProjects = projects.filter(p => p.team_id === t.id);
+      if (teamProjects.length === 0) {
+        return { team: t, dept: departmentById.get(t.department_id), count: 0, completedCount: 0, avgProgress: 0 };
+      }
+      const completedCount = teamProjects.filter(p => p.status === '完了').length;
+      const sumProgress = teamProjects.reduce((acc, p) => acc + projectProgress(p.id), 0);
+      return {
+        team: t,
+        dept: departmentById.get(t.department_id),
+        count: teamProjects.length,
+        completedCount,
+        avgProgress: Math.round(sumProgress / teamProjects.length),
+      };
+    }).filter(r => r.count > 0);
+
+    // メンバー別タスク負荷（dummy.memberWorkloads 相当）
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const workloads = profiles.map(u => {
+      const myAll = tasks.filter(t => t.assignee_id === u.id);
+      const open = myAll.filter(t => t.status !== '完了');
+      const overdue = open.filter(t => {
+        if (!t.due_date) return false;
+        return new Date(t.due_date) < today;
+      });
+      return {
+        user: u,
+        total: myAll.length,
+        openCount: open.length,
+        overdueCount: overdue.length,
+      };
+    }).sort((a, b) => b.openCount - a.openCount);
+
+    // 期限超過タスク（dummy.overdueTasks 相当）
+    const overdues = tasks
+      .filter(t => {
+        if (!t.due_date || t.status === '完了') return false;
+        return new Date(t.due_date) < today;
+      })
+      .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
+      .map(t => ({
+        ...t,
+        project: projectById.get(t.project_id),
+        assignee: t.assignee_id ? profileById.get(t.assignee_id) : null,
+        days: daysUntil(t.due_date),
+      }));
+
+    return { teamSummaries, workloads, overdues };
+  }, [departments, teams, profiles, projects, tasks]);
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
@@ -52,6 +164,18 @@ export default function AdminDashboardPage() {
         </p>
       </div>
 
+      {error && (
+        <div style={{
+          padding: S.m,
+          background: C.dangerBg,
+          color: C.danger,
+          borderRadius: '6px',
+          marginBottom: S.m,
+        }}>
+          {error}
+        </div>
+      )}
+
       {/* 上段：サマリー数値 */}
       <div style={{
         display: 'grid',
@@ -62,26 +186,26 @@ export default function AdminDashboardPage() {
         <SummaryCard
           Icon={Building2}
           label="部署"
-          value={DUMMY_DEPARTMENTS.length}
+          value={loading ? '…' : departments.length}
           to="/admin/departments"
         />
         <SummaryCard
           Icon={Users}
           label="チーム"
-          value={DUMMY_TEAMS.length}
+          value={loading ? '…' : teams.length}
           to="/teams"
         />
         <SummaryCard
           Icon={UserCog}
           label="ユーザー"
-          value={DUMMY_USERS.length}
+          value={loading ? '…' : profiles.length}
           to="/admin/users"
         />
         <SummaryCard
           Icon={AlertTriangle}
           label="期限超過タスク"
-          value={overdues.length}
-          danger={overdues.length > 0}
+          value={loading ? '…' : view.overdues.length}
+          danger={view.overdues.length > 0}
         />
       </div>
 
@@ -92,12 +216,12 @@ export default function AdminDashboardPage() {
         gap: S.m,
         marginBottom: S.m,
       }}>
-        <TeamProgressCard />
-        <MemberWorkloadCard workloads={workloads} />
+        <TeamProgressCard rows={view.teamSummaries} loading={loading} />
+        <MemberWorkloadCard workloads={view.workloads} loading={loading} />
       </div>
 
       {/* 下段：期限超過タスク */}
-      <OverdueTasksCard overdues={overdues} />
+      <OverdueTasksCard overdues={view.overdues} loading={loading} />
 
       {/* ショートカット */}
       <div style={{
@@ -118,10 +242,11 @@ export default function AdminDashboardPage() {
 // 上段：サマリー
 // ============================================================
 function SummaryCard({ Icon, label, value, danger, to }) {
+  const isDanger = danger && typeof value === 'number' && value > 0;
   const inner = (
     <div style={{
       background: C.surface,
-      border: `1px solid ${danger && value > 0 ? C.danger : C.border}`,
+      border: `1px solid ${isDanger ? C.danger : C.border}`,
       borderRadius: '8px',
       padding: S.m,
       boxShadow: C.shadow1,
@@ -134,8 +259,8 @@ function SummaryCard({ Icon, label, value, danger, to }) {
         width: '40px',
         height: '40px',
         borderRadius: '50%',
-        background: danger && value > 0 ? C.dangerBg : C.accentLight,
-        color: danger && value > 0 ? C.danger : C.accent,
+        background: isDanger ? C.dangerBg : C.accentLight,
+        color: isDanger ? C.danger : C.accent,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -156,7 +281,7 @@ function SummaryCard({ Icon, label, value, danger, to }) {
         <div style={{
           fontSize: '1.5rem',
           fontWeight: 700,
-          color: danger && value > 0 ? C.danger : C.text,
+          color: isDanger ? C.danger : C.text,
           fontVariantNumeric: 'tabular-nums',
         }}>
           {value}
@@ -179,16 +304,14 @@ function SummaryCard({ Icon, label, value, danger, to }) {
 // ============================================================
 // チーム進捗カード
 // ============================================================
-function TeamProgressCard() {
-  const rows = DUMMY_TEAMS.map(t => {
-    const dept = findDepartment(t.department_id);
-    const summary = teamProjectSummary(t.id);
-    return { team: t, dept, ...summary };
-  }).filter(r => r.count > 0);
-
+function TeamProgressCard({ rows, loading }) {
   return (
     <Card title="全チーム進捗率" Icon={TrendingUp}>
-      {rows.length === 0 ? (
+      {loading ? (
+        <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
+          読み込み中...
+        </p>
+      ) : rows.length === 0 ? (
         <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
           チームに案件が登録されていません
         </p>
@@ -259,13 +382,17 @@ function TeamProgressCard() {
 // ============================================================
 // メンバー負荷カード
 // ============================================================
-function MemberWorkloadCard({ workloads }) {
-  const max = Math.max(1, ...workloads.map(w => w.openCount));
+function MemberWorkloadCard({ workloads, loading }) {
   const visible = workloads.filter(w => w.total > 0).slice(0, 8);
+  const max = Math.max(1, ...visible.map(w => w.openCount));
 
   return (
     <Card title="メンバー別タスク負荷" Icon={Users}>
-      {visible.length === 0 ? (
+      {loading ? (
+        <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
+          読み込み中...
+        </p>
+      ) : visible.length === 0 ? (
         <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
           タスクがアサインされているメンバーはいません
         </p>
@@ -273,7 +400,6 @@ function MemberWorkloadCard({ workloads }) {
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: S.s }}>
           {visible.map(w => {
             const ratio = w.openCount / max;
-            // 負荷レベル：未完了タスク数で 3 段階
             const heat =
               w.openCount >= 5 ? C.danger :
               w.openCount >= 3 ? C.orange :
@@ -333,66 +459,65 @@ function MemberWorkloadCard({ workloads }) {
 // ============================================================
 // 期限超過タスク
 // ============================================================
-function OverdueTasksCard({ overdues }) {
+function OverdueTasksCard({ overdues, loading }) {
   return (
     <Card title="期限超過タスク" Icon={AlertTriangle}>
-      {overdues.length === 0 ? (
+      {loading ? (
+        <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
+          読み込み中...
+        </p>
+      ) : overdues.length === 0 ? (
         <p style={{ color: C.textMuted, fontSize: '0.857rem', textAlign: 'center', padding: `${S.l} 0`, margin: 0 }}>
           期限超過のタスクはありません 🎉
         </p>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {overdues.map(t => {
-            const project = findProject(t.project_id);
-            const assignee = t.assignee_id ? findUser(t.assignee_id) : null;
-            const days = daysUntil(t.due_date);
-            return (
-              <li key={t.id}>
-                <Link
-                  to={`/projects/${t.project_id}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: S.s,
-                    padding: S.s,
-                    borderRadius: '6px',
-                    textDecoration: 'none',
-                    color: 'inherit',
-                    background: 'transparent',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '0.857rem', fontWeight: 700, color: C.text }}>
-                      {t.name}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: C.textMuted, marginTop: '2px' }}>
-                      {project?.name}
-                    </div>
+          {overdues.map(t => (
+            <li key={t.id}>
+              <Link
+                to={`/projects/${t.project_id}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: S.s,
+                  padding: S.s,
+                  borderRadius: '6px',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  background: 'transparent',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.857rem', fontWeight: 700, color: C.text }}>
+                    {t.name}
                   </div>
-                  {assignee && (
-                    <div title={assignee.full_name}>
-                      <Avatar name={assignee.full_name} size={24} />
-                    </div>
-                  )}
-                  {t.priority && <Badge variant={priorityVariant(t.priority)}>{t.priority}</Badge>}
-                  <div style={{
-                    minWidth: '120px',
-                    textAlign: 'right',
-                    fontSize: '0.75rem',
-                  }}>
-                    <div style={{ color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
-                      {formatShortDate(t.due_date)}
-                    </div>
-                    <div style={{ color: C.danger, fontWeight: 700 }}>
-                      {Math.abs(days)} 日超過
-                    </div>
+                  <div style={{ fontSize: '0.75rem', color: C.textMuted, marginTop: '2px' }}>
+                    {t.project?.name}
                   </div>
-                </Link>
-              </li>
-            );
-          })}
+                </div>
+                {t.assignee && (
+                  <div title={t.assignee.full_name}>
+                    <Avatar name={t.assignee.full_name} size={24} />
+                  </div>
+                )}
+                {t.priority && <Badge variant={priorityVariant(t.priority)}>{t.priority}</Badge>}
+                <div style={{
+                  minWidth: '120px',
+                  textAlign: 'right',
+                  fontSize: '0.75rem',
+                }}>
+                  <div style={{ color: C.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+                    {formatShortDate(t.due_date)}
+                  </div>
+                  <div style={{ color: C.danger, fontWeight: 700 }}>
+                    {Math.abs(t.days)} 日超過
+                  </div>
+                </div>
+              </Link>
+            </li>
+          ))}
         </ul>
       )}
     </Card>
