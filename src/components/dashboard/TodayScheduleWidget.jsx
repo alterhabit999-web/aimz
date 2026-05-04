@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Calendar, MapPin, Users as UsersIcon } from 'lucide-react';
 import { C, S } from '../../styles/tokens';
 import Card from '../ui/Card';
 import { listSchedulesOnDate, listAllScheduleParticipants } from '../../api';
 import { formatTime } from '../../utils/format';
+import useReloadOnFocus from '../../hooks/useReloadOnFocus';
 
 /**
  * TodayScheduleWidget — 今日の予定をタイムライン形式で表示。
@@ -15,40 +16,37 @@ export default function TodayScheduleWidget() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        const dateStr = `${yyyy}-${mm}-${dd}`;
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
 
-        const [list, participants] = await Promise.all([
-          listSchedulesOnDate(dateStr),
-          listAllScheduleParticipants({ limit: 1000 }),
-        ]);
+      const [list, participants] = await Promise.all([
+        listSchedulesOnDate(dateStr),
+        listAllScheduleParticipants({ limit: 1000 }),
+      ]);
 
-        // schedule_id → 参加人数
-        const counts = new Map();
-        for (const p of participants) {
-          counts.set(p.schedule_id, (counts.get(p.schedule_id) || 0) + 1);
-        }
-
-        if (!cancelled) {
-          setSchedules(list);
-          setParticipantCountById(counts);
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) setError(err?.message || 'スケジュール取得に失敗しました');
-      } finally {
-        if (!cancelled) setLoading(false);
+      const counts = new Map();
+      for (const p of participants) {
+        counts.set(p.schedule_id, (counts.get(p.schedule_id) || 0) + 1);
       }
-    })();
-    return () => { cancelled = true; };
+      setSchedules(list);
+      setParticipantCountById(counts);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || 'スケジュール取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   return (
     <Card title="本日のスケジュール" Icon={Calendar}>

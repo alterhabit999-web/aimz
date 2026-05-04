@@ -29,6 +29,7 @@ import {
 } from '../../api/profiles';
 import InviteUserModal from '../../components/users/InviteUserModal';
 import EditUserModal from '../../components/users/EditUserModal';
+import useReloadOnFocus from '../../hooks/useReloadOnFocus';
 
 /**
  * UsersPage — ユーザー管理（仕様 3-2 / 3-14）。
@@ -68,6 +69,7 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

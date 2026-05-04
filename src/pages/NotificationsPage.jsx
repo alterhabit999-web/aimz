@@ -19,6 +19,7 @@ import {
   getTask,
 } from '../api';
 import { formatTimeAgo } from '../utils/format';
+import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
 /**
  * NotificationsPage — 通知一覧（仕様 3-15）。
@@ -76,6 +77,7 @@ export default function NotificationsPage() {
   }, [user?.id]);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   const projectById = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
 

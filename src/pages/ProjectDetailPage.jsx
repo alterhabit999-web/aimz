@@ -31,6 +31,7 @@ import GanttTab from '../components/projects/tabs/GanttTab';
 import KanbanTab from '../components/projects/tabs/KanbanTab';
 import TaskListTab from '../components/projects/tabs/TaskListTab';
 import FilesTab from '../components/projects/tabs/FilesTab';
+import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
 /**
  * ProjectDetailPage — 案件詳細（PHASE 3 で実 DB 化）。
@@ -100,6 +101,7 @@ export default function ProjectDetailPage() {
   }, [projectId]);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   // 派生
   const view = useMemo(() => {

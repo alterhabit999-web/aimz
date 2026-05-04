@@ -17,6 +17,7 @@ import {
   deleteAllSubtasksForTask,
   syncProjectStatusFromTasks,
 } from '../../../api';
+import useReloadOnFocus from '../../../hooks/useReloadOnFocus';
 
 /**
  * GanttTab — ガントチャート（PHASE 3 で本実装）。
@@ -108,6 +109,7 @@ export default function GanttTab({ project }) {
   }, [project.id]);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   const openCreate = () => {
     setSelectedTask(null);

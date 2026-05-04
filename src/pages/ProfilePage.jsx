@@ -15,6 +15,7 @@ import {
   listTeams,
   listDepartments,
 } from '../api';
+import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
 /**
  * ProfilePage — マイページ（仕様 3-1：プロフィール編集 + パスワード変更）。
@@ -61,6 +62,7 @@ export default function ProfilePage() {
   }, [user?.id]);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   // ─── 派生：自分の所属部署・チーム・リーダー判定 ───
   const view = useMemo(() => {

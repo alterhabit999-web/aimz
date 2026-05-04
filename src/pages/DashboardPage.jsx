@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { C, S } from '../styles/tokens';
 import { useAuth } from '../contexts/AuthContext';
 import { formatLongDate } from '../utils/format';
@@ -7,6 +7,7 @@ import {
   listProjects,
   listAllTeamMembers,
 } from '../api';
+import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
 import TodayScheduleWidget from '../components/dashboard/TodayScheduleWidget';
 import UpcomingTasksWidget from '../components/dashboard/UpcomingTasksWidget';
@@ -41,28 +42,26 @@ export default function DashboardPage() {
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading]         = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [t, p, tm] = await Promise.all([
-          listTasks(),
-          listProjects({ limit: 200 }),
-          listAllTeamMembers(),
-        ]);
-        if (!cancelled) {
-          setTasks(t);
-          setProjects(p);
-          setTeamMembers(tm);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [t, p, tm] = await Promise.all([
+        listTasks(),
+        listProjects({ limit: 200 }),
+        listAllTeamMembers(),
+      ]);
+      setTasks(t);
+      setProjects(p);
+      setTeamMembers(tm);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   // ─── 派生データ ───
   const view = useMemo(() => {

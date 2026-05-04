@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, Clock, UserPlus, MessageSquare } from 'lucide-react';
 import { C, S } from '../../styles/tokens';
@@ -6,6 +6,7 @@ import Card from '../ui/Card';
 import { useAuth } from '../../contexts/AuthContext';
 import { listNotificationsForUser } from '../../api';
 import { formatTimeAgo } from '../../utils/format';
+import useReloadOnFocus from '../../hooks/useReloadOnFocus';
 
 /**
  * NotificationsWidget — お知らせ（アプリ内通知）。
@@ -17,21 +18,21 @@ export default function NotificationsWidget() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!user?.id) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = await listNotificationsForUser(user.id, { limit: 20 });
-        if (!cancelled) setNotifications(list);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    setLoading(true);
+    try {
+      const list = await listNotificationsForUser(user.id, { limit: 20 });
+      setNotifications(list);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }, [user?.id]);
+
+  useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 

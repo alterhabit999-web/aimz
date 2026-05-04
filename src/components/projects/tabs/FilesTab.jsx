@@ -14,6 +14,7 @@ import {
   MAX_FILE_SIZE,
 } from '../../../api';
 import { formatTimeAgo } from '../../../utils/format';
+import useReloadOnFocus from '../../../hooks/useReloadOnFocus';
 
 /**
  * FilesTab — 案件詳細「ファイル」タブ（PHASE 3 で実装）。
@@ -91,6 +92,7 @@ export default function FilesTab({ project }) {
   }, [project.id]);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   // ─── アップロード処理（共通） ───
   const handleUpload = async (file) => {

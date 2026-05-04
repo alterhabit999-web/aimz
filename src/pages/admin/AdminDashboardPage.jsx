@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Building2,
@@ -21,6 +21,7 @@ import {
   listTasks,
 } from '../../api';
 import { formatShortDate } from '../../utils/format';
+import useReloadOnFocus from '../../hooks/useReloadOnFocus';
 
 /**
  * AdminDashboardPage — 管理者ダッシュボード（仕様 3-14）。
@@ -52,33 +53,32 @@ export default function AdminDashboardPage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [d, t, p, pr, tk] = await Promise.all([
-          listDepartments(),
-          listTeams(),
-          listProfiles({ limit: 200 }),
-          listProjects({ limit: 200 }),
-          listTasks({ limit: 500 }),
-        ]);
-        if (!cancelled) {
-          setDepartments(d);
-          setTeams(t);
-          setProfiles(p);
-          setProjects(pr);
-          setTasks(tk);
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) setError(err?.message || 'データ取得に失敗しました');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [d, t, p, pr, tk] = await Promise.all([
+        listDepartments(),
+        listTeams(),
+        listProfiles({ limit: 200 }),
+        listProjects({ limit: 200 }),
+        listTasks({ limit: 500 }),
+      ]);
+      setDepartments(d);
+      setTeams(t);
+      setProfiles(p);
+      setProjects(pr);
+      setTasks(tk);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || 'データ取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   // ─── 派生データ ───
   const view = useMemo(() => {

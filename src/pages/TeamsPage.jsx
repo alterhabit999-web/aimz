@@ -18,6 +18,7 @@ import {
 import TeamCard from '../components/teams/TeamCard';
 import MembersTable from '../components/teams/MembersTable';
 import CreateTeamModal from '../components/teams/CreateTeamModal';
+import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
 /**
  * TeamsPage — チーム画面（仕様 v1.3、PHASE 3 で実 DB 化）。
@@ -68,6 +69,7 @@ export default function TeamsPage() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   // ─── 派生データの組み立て ───
   const view = useMemo(() => {

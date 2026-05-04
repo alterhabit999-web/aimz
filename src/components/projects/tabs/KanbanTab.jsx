@@ -35,6 +35,7 @@ import {
   deleteAllSubtasksForTask,
   syncProjectStatusFromTasks,
 } from '../../../api';
+import useReloadOnFocus from '../../../hooks/useReloadOnFocus';
 
 /**
  * KanbanTab — カンバンボード（DnD 対応）。
@@ -104,6 +105,7 @@ export default function KanbanTab({ project }) {
   }, [project.id]);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   const profileById = useMemo(() => new Map(profiles.map(p => [p.id, p])), [profiles]);
 

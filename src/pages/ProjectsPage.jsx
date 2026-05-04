@@ -17,6 +17,7 @@ import {
 } from '../api';
 import ProjectCard from '../components/projects/ProjectCard';
 import ProjectFormModal from '../components/projects/ProjectFormModal';
+import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
 /**
  * ProjectsPage — 案件一覧（PHASE 3 で実 DB 化）。
@@ -74,6 +75,7 @@ export default function ProjectsPage() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   // ─── 派生データ ───
   const view = useMemo(() => {

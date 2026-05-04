@@ -19,6 +19,7 @@ import {
   deleteAllSubtasksForTask,
   syncProjectStatusFromTasks,
 } from '../../../api';
+import useReloadOnFocus from '../../../hooks/useReloadOnFocus';
 
 /**
  * TaskListTab — 案件詳細「タスク一覧」タブ。
@@ -74,6 +75,7 @@ export default function TaskListTab({ project }) {
   }, [project.id]);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   const profileById = useMemo(() => new Map(profiles.map(p => [p.id, p])), [profiles]);
 

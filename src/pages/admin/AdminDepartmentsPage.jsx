@@ -4,6 +4,7 @@ import { C, S, ICON_SM } from '../../styles/tokens';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import DepartmentFormModal from '../../components/departments/DepartmentFormModal';
+import useReloadOnFocus from '../../hooks/useReloadOnFocus';
 import { teamsByDepartment } from '../../data/dummy';
 import {
   listDepartments,
@@ -45,6 +46,7 @@ export default function AdminDepartmentsPage() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+  useReloadOnFocus(reload);
 
   const handleCreate = async (data) => {
     try {
