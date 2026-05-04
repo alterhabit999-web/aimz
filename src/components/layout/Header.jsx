@@ -1,11 +1,12 @@
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 import { Menu, Bell } from 'lucide-react';
 import { C, S, ICON_SM, ICON_MD } from '../../styles/tokens';
 import Avatar from '../ui/Avatar';
 
 /**
  * Header — 上部バー。
- * サイドバー開閉ボタン・通知ベル・自分のアバター。
+ * サイドバー開閉ボタン・通知ベル（クリックで /notifications）・自分のアバター。
  */
 export default function Header({ onToggleSidebar, user, unreadCount = 0 }) {
   return (
@@ -38,14 +39,34 @@ export default function Header({ onToggleSidebar, user, unreadCount = 0 }) {
 
       <div style={{ flex: 1 }} />
 
-      {/* 通知ベル（未読バッジ付き） */}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-        <Bell size={ICON_SM} color={C.textSub} />
+      {/* 通知ベル（クリックで /notifications へ。未読バッジ付き） */}
+      <NavLink
+        to="/notifications"
+        title={unreadCount > 0 ? `未読 ${unreadCount} 件` : '通知'}
+        style={({ isActive }) => ({
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '6px',
+          borderRadius: '6px',
+          background: isActive ? C.accentLight : 'transparent',
+          color: isActive ? C.accent : C.textSub,
+          textDecoration: 'none',
+          transition: 'background 0.15s, color 0.15s',
+        })}
+        onMouseEnter={e => {
+          if (!e.currentTarget.dataset.active) e.currentTarget.style.background = C.bgSub;
+        }}
+        onMouseLeave={e => {
+          if (!e.currentTarget.dataset.active) e.currentTarget.style.background = 'transparent';
+        }}
+      >
+        <Bell size={ICON_SM} />
         {unreadCount > 0 && (
           <span style={{
             position: 'absolute',
-            top: '-4px',
-            right: '-4px',
+            top: '0',
+            right: '0',
             minWidth: '14px',
             height: '14px',
             padding: '0 3px',
@@ -62,9 +83,9 @@ export default function Header({ onToggleSidebar, user, unreadCount = 0 }) {
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
-      </div>
+      </NavLink>
 
-      <Avatar name={user?.full_name} size={28} />
+      <Avatar name={user?.full_name} src={user?.avatar_url} size={28} />
     </header>
   );
 }

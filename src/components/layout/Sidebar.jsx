@@ -15,7 +15,6 @@ import {
 import { C, S, ICON_SM } from '../../styles/tokens';
 import Avatar from '../ui/Avatar';
 import SectionLabel from '../ui/SectionLabel';
-import { myDepartments } from '../../data/dummy';
 
 /**
  * Sidebar — 左側のナビゲーション。
@@ -24,11 +23,14 @@ import { myDepartments } from '../../data/dummy';
  *   - メニュー順：ダッシュボード → 案件一覧 → チーム → 通知
  *   - 管理者：管理者ダッシュボード / ユーザー管理 / 部署管理
  *   - アカウント：マイページ
+ *
+ * Props:
+ *   open: boolean
+ *   user: 自分の profile
+ *   departments: 自分の所属部署配列（AppShell で実 DB から取得して渡す）
  */
-export default function Sidebar({ open, user }) {
+export default function Sidebar({ open, user, departments = [] }) {
   if (!open) return null;
-
-  const departments = myDepartments(user?.id);
 
   return (
     <aside style={{
@@ -108,7 +110,7 @@ export default function Sidebar({ open, user }) {
         alignItems: 'center',
         gap: S.s,
       }}>
-        <Avatar name={user?.full_name} size={32} />
+        <Avatar name={user?.full_name} src={user?.avatar_url} size={32} />
         <div style={{ overflow: 'hidden', flex: 1 }}>
           <div style={{
             fontSize: '0.857rem',
