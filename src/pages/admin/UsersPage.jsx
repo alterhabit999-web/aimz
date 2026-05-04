@@ -16,17 +16,14 @@ import Badge from '../../components/ui/Badge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { inputStyle } from '../../components/ui/FormField';
 import {
-  teamMembershipsOf,
-  findTeam,
-  isTeamLeader,
-} from '../../data/dummy';
-import {
   listProfiles,
   updateProfile,
-  setProfileActive,
-  setProfileAdmin,
   deleteProfile,
-} from '../../api/profiles';
+  listTeams,
+  listDepartments,
+  listAllTeamMembers,
+  setUserMemberships,
+} from '../../api';
 import InviteUserModal from '../../components/users/InviteUserModal';
 import EditUserModal from '../../components/users/EditUserModal';
 import useReloadOnFocus from '../../hooks/useReloadOnFocus';
@@ -49,17 +46,28 @@ export default function UsersPage() {
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  // ─── 実 DB から profiles を取得 ───
-  const [profiles, setProfiles] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
+  // ─── 実 DB から取得 ───
+  const [profiles, setProfiles]       = useState([]);
+  const [teams, setTeams]             = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const list = await listProfiles({ limit: 100 });
-      setProfiles(list);
+      const [p, t, d, tm] = await Promise.all([
+        listProfiles({ limit: 100 }),
+        listTeams(),
+        listDepartments(),
+        listAllTeamMembers(),
+      ]);
+      setProfiles(p);
+      setTeams(t);
+      setDepartments(d);
+      setTeamMembers(tm);
     } catch (err) {
       console.error(err);
       setError(err?.message || 'プロフィールの取得に失敗しました');
@@ -71,6 +79,24 @@ export default function UsersPage() {
   useEffect(() => { reload(); }, [reload]);
   useReloadOnFocus(reload);
 
+  // 派生：teamId / userId → メタ情報を解決
+  const teamById       = useMemo(() => new Map(teams.map(t => [t.id, t])), [teams]);
+  const departmentById = useMemo(() => new Map(departments.map(d => [d.id, d])), [departments]);
+  const isTeamLeaderOf = useCallback(
+    (userId) => teamMembers.some(m => m.user_id === userId && m.role === 'leader'),
+    [teamMembers]
+  );
+  const membershipsOfUser = useCallback(
+    (userId) => teamMembers
+      .filter(m => m.user_id === userId)
+      .map(m => {
+        const team = teamById.get(m.team_id);
+        const dept = team ? departmentById.get(team.department_id) : null;
+        return { ...m, team, dept };
+      }),
+    [teamMembers, teamById, departmentById]
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return profiles.filter(u => {
@@ -79,19 +105,18 @@ export default function UsersPage() {
         u.email?.toLowerCase().includes(q);
       const matchF = (() => {
         if (filter === 'admin')    return u.is_admin;
-        if (filter === 'leader')   return !u.is_admin && isTeamLeader(u.id);
+        if (filter === 'leader')   return !u.is_admin && isTeamLeaderOf(u.id);
         if (filter === 'active')   return u.is_active !== false;
         if (filter === 'inactive') return u.is_active === false;
         return true;
       })();
       return matchQ && matchF;
     });
-  }, [profiles, query, filter]);
+  }, [profiles, query, filter, isTeamLeaderOf]);
 
   const handleInvited = (data) => {
-    // 招待は invitations コレクション + Appwrite Auth 連携が必要なので
-    // ここではダミーのまま（PHASE 4 で実装）
-    console.log('ユーザー招待（ダミー）:', data);
+    // 招待発行後の動作は InviteUserModal 内で完結（invitations にトークンを保存）
+    console.log('ユーザー招待:', data);
   };
 
   const handleEdit = async (data) => {
@@ -101,6 +126,10 @@ export default function UsersPage() {
         is_admin:  data.is_admin,
         is_active: data.is_active,
       });
+      // 所属（team_members）の差分同期
+      if (Array.isArray(data.memberships)) {
+        await setUserMemberships(data.id, data.memberships);
+      }
       await reload();
     } catch (err) {
       console.error(err);
@@ -112,6 +141,9 @@ export default function UsersPage() {
     if (!deleteTarget) return;
     try {
       await deleteProfile(deleteTarget.id);
+      // 配下の team_members も削除（ユーザーが所属していたチームから除外）
+      // ※ Auth ユーザーは Console から手動削除する必要あり（既知の制限）
+      await setUserMemberships(deleteTarget.id, []);
       setDeleteTarget(null);
       await reload();
     } catch (err) {
@@ -119,9 +151,6 @@ export default function UsersPage() {
       alert('削除に失敗しました：' + (err?.message || err));
     }
   };
-
-  // 不要警告抑制（将来の実装で使う想定の API を import 済み）
-  void setProfileActive; void setProfileAdmin;
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
@@ -247,6 +276,8 @@ export default function UsersPage() {
                 <UserRow
                   key={u.id}
                   user={u}
+                  memberships={membershipsOfUser(u.id)}
+                  leader={isTeamLeaderOf(u.id)}
                   onEdit={() => setEditTarget(u)}
                   onDelete={() => setDeleteTarget(u)}
                 />
@@ -266,6 +297,9 @@ export default function UsersPage() {
       <EditUserModal
         open={!!editTarget}
         user={editTarget}
+        teams={teams}
+        departments={departments}
+        teamMembers={teamMembers}
         onClose={() => setEditTarget(null)}
         onSubmit={handleEdit}
       />
@@ -292,9 +326,7 @@ export default function UsersPage() {
 // ============================================================
 // UserRow
 // ============================================================
-function UserRow({ user, onEdit, onDelete }) {
-  const memberships = teamMembershipsOf(user.id);
-  const leader = isTeamLeader(user.id);
+function UserRow({ user, memberships = [], leader, onEdit, onDelete }) {
   const active = user.is_active !== false;
 
   return (
@@ -345,31 +377,28 @@ function UserRow({ user, onEdit, onDelete }) {
           <span style={{ color: C.textMuted }}>未所属</span>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-            {memberships.map((m, i) => {
-              const team = findTeam(m.team_id);
-              return (
-                <span
-                  key={i}
-                  title={m.role === 'leader' ? 'リーダー' : 'メンバー'}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '2px',
-                    padding: '2px 6px',
-                    background: C.bgSub,
-                    color: C.textSub,
-                    borderRadius: '3px',
-                    fontSize: '0.75rem',
-                    fontWeight: m.role === 'leader' ? 700 : 400,
-                  }}
-                >
-                  {team?.name || '—'}
-                  {m.role === 'leader' && (
-                    <Crown size={9} color={C.orange} fill={C.orange} />
-                  )}
-                </span>
-              );
-            })}
+            {memberships.map((m, i) => (
+              <span
+                key={i}
+                title={`${m.dept?.name ? m.dept.name + ' / ' : ''}${m.role === 'leader' ? 'リーダー' : 'メンバー'}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '2px',
+                  padding: '2px 6px',
+                  background: C.bgSub,
+                  color: C.textSub,
+                  borderRadius: '3px',
+                  fontSize: '0.75rem',
+                  fontWeight: m.role === 'leader' ? 700 : 400,
+                }}
+              >
+                {m.team?.name || '—'}
+                {m.role === 'leader' && (
+                  <Crown size={9} color={C.orange} fill={C.orange} />
+                )}
+              </span>
+            ))}
           </div>
         )}
       </Td>

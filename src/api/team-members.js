@@ -114,3 +114,30 @@ export async function deleteAllForTeam(teamId) {
     await removeMember(teamId, m.user_id);
   }
 }
+
+/**
+ * ユーザーの所属（team_members）を一括同期する。
+ *   userId: 対象ユーザー
+ *   memberships: [{ team_id, role: 'leader' | 'member' }]
+ * 既存の編成と差分を取り、追加・更新・削除を行う。
+ */
+export async function setUserMemberships(userId, memberships) {
+  const desired = new Map(memberships.map(m => [m.team_id, m.role]));
+  const existing = await listMembershipsByUser(userId);
+
+  // 削除：入力に無いもの
+  for (const m of existing) {
+    if (!desired.has(m.team_id)) {
+      await removeMember(m.team_id, userId);
+    }
+  }
+  // 追加 or role 更新
+  for (const [teamId, role] of desired) {
+    const cur = existing.find(m => m.team_id === teamId);
+    if (!cur) {
+      await addMember(teamId, userId, role);
+    } else if (cur.role !== role) {
+      await updateRole(teamId, userId, role);
+    }
+  }
+}
