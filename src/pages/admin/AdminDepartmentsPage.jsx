@@ -1,17 +1,19 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Building2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus, Pencil, Trash2, Building2, Users } from 'lucide-react';
 import { C, S, ICON_SM } from '../../styles/tokens';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import DepartmentFormModal from '../../components/departments/DepartmentFormModal';
+import DepartmentMembersModal from '../../components/departments/DepartmentMembersModal';
 import useReloadOnFocus from '../../hooks/useReloadOnFocus';
-import { teamsByDepartment } from '../../data/dummy';
 import {
   listDepartments,
   createDepartment,
   updateDepartment,
   deleteDepartment,
-} from '../../api/departments';
+  listTeams,
+  listAllTeamMembers,
+} from '../../api';
 
 /**
  * AdminDepartmentsPage — 部署管理（Admin のみ）。
@@ -24,19 +26,28 @@ import {
  */
 export default function AdminDepartmentsPage() {
   const [departments, setDepartments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [teams, setTeams]             = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState(null);
+  const [createOpen, setCreateOpen]   = useState(false);
+  const [editTarget, setEditTarget]   = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [membersTarget, setMembersTarget] = useState(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const list = await listDepartments({ limit: 100 });
-      setDepartments(list);
+      const [d, t, tm] = await Promise.all([
+        listDepartments({ limit: 100 }),
+        listTeams(),
+        listAllTeamMembers(),
+      ]);
+      setDepartments(d);
+      setTeams(t);
+      setTeamMembers(tm);
     } catch (err) {
       console.error(err);
       setError(err?.message || '部署の取得に失敗しました');
@@ -47,6 +58,19 @@ export default function AdminDepartmentsPage() {
 
   useEffect(() => { reload(); }, [reload]);
   useReloadOnFocus(reload);
+
+  // 部署 ID → { teamCount, memberCount }
+  const statsByDept = useMemo(() => {
+    const map = new Map();
+    for (const d of departments) {
+      const deptTeamIds = teams.filter(t => t.department_id === d.id).map(t => t.id);
+      const userIds = new Set(
+        teamMembers.filter(m => deptTeamIds.includes(m.team_id)).map(m => m.user_id)
+      );
+      map.set(d.id, { teamCount: deptTeamIds.length, memberCount: userIds.size });
+    }
+    return map;
+  }, [departments, teams, teamMembers]);
 
   const handleCreate = async (data) => {
     try {
@@ -135,6 +159,7 @@ export default function AdminDepartmentsPage() {
                 <Th>部署名</Th>
                 <Th>説明</Th>
                 <Th align="right">チーム数</Th>
+                <Th align="right">メンバー数</Th>
                 <Th align="right">操作</Th>
               </tr>
             </thead>
@@ -143,8 +168,10 @@ export default function AdminDepartmentsPage() {
                 <DepartmentRow
                   key={dept.id}
                   department={dept}
+                  stats={statsByDept.get(dept.id) || { teamCount: 0, memberCount: 0 }}
                   onEdit={() => setEditTarget(dept)}
                   onDelete={() => setDeleteTarget(dept)}
+                  onMembers={() => setMembersTarget(dept)}
                 />
               ))}
             </tbody>
@@ -168,6 +195,13 @@ export default function AdminDepartmentsPage() {
         onSubmit={handleEdit}
       />
 
+      <DepartmentMembersModal
+        open={!!membersTarget}
+        department={membersTarget}
+        onClose={() => setMembersTarget(null)}
+        onChanged={reload}
+      />
+
       <ConfirmDialog
         open={!!deleteTarget}
         title="部署の削除"
@@ -187,9 +221,8 @@ export default function AdminDepartmentsPage() {
   );
 }
 
-function DepartmentRow({ department, onEdit, onDelete }) {
-  const teams = teamsByDepartment(department.id);
-  const teamCount = teams.length;
+function DepartmentRow({ department, stats, onEdit, onDelete, onMembers }) {
+  const { teamCount = 0, memberCount = 0 } = stats || {};
 
   return (
     <tr style={{ borderTop: `1px solid ${C.border}` }}>
@@ -210,7 +243,15 @@ function DepartmentRow({ department, onEdit, onDelete }) {
         </span>
       </Td>
       <Td align="right">
+        <span style={{ color: C.text, fontVariantNumeric: 'tabular-nums' }}>
+          {memberCount}
+        </span>
+      </Td>
+      <Td align="right">
         <div style={{ display: 'inline-flex', gap: S.xs }}>
+          <Button variant="secondary" size="sm" Icon={Users} onClick={onMembers}>
+            メンバー
+          </Button>
           <Button variant="secondary" size="sm" Icon={Pencil} onClick={onEdit}>
             編集
           </Button>
