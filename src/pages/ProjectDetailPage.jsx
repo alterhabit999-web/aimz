@@ -21,6 +21,11 @@ import {
   deleteAllForProject,
   deleteProject,
   deleteAllFilesForProject,
+  deleteTask,
+  deleteAllSubtasksForTask,
+  listSchedulesByProject,
+  deleteSchedule,
+  deleteAllParticipantsForSchedule,
 } from '../api';
 
 import ProjectHeader from '../components/projects/ProjectHeader';
@@ -161,13 +166,42 @@ export default function ProjectDetailPage() {
 
   const handleDelete = async () => {
     try {
-      // カスケード：担当者・配下ファイルを先に削除
+      // ─── カスケード削除 ───
+      // 配下タスク（+ サブタスク）
+      const projectTasks = await listTasksByProject(project.id);
+      for (const t of projectTasks) {
+        try {
+          await deleteAllSubtasksForTask(t.id);
+          await deleteTask(t.id);
+        } catch (e) {
+          console.warn(`task ${t.id} 削除失敗:`, e?.message);
+        }
+      }
+
+      // 配下スケジュール（+ 参加者）
+      try {
+        const projectSchedules = await listSchedulesByProject(project.id);
+        for (const s of projectSchedules) {
+          try {
+            await deleteAllParticipantsForSchedule(s.id);
+            await deleteSchedule(s.id);
+          } catch (e) {
+            console.warn(`schedule ${s.id} 削除失敗:`, e?.message);
+          }
+        }
+      } catch (e) {
+        console.warn('schedules カスケード失敗:', e?.message);
+      }
+
+      // 配下ファイル（Storage の実体 + project_files メタ）
       await deleteAllFilesForProject(project.id);
+
+      // 担当者（project_assignees）
       await deleteAllForProject(project.id);
-      // 注意：配下タスク・サブタスク・スケジュール・通知の削除は
-      // 専用カスケードヘルパーが今は無いため、案件削除時の不整合は当面残る。
-      // RLS 本実装時 / 削除フロー再設計時に整理する。
+
+      // 最後に案件本体
       await deleteProject(project.id);
+
       navigate('/projects');
     } catch (err) {
       console.error(err);
