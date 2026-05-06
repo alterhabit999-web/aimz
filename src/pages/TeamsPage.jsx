@@ -19,6 +19,7 @@ import TeamCard from '../components/teams/TeamCard';
 import MembersTable from '../components/teams/MembersTable';
 import CreateTeamModal from '../components/teams/CreateTeamModal';
 import useReloadOnFocus from '../hooks/useReloadOnFocus';
+import useIsCompact from '../hooks/useIsCompact';
 
 /**
  * TeamsPage — チーム画面（仕様 v1.3、PHASE 3 で実 DB 化）。
@@ -32,6 +33,7 @@ import useReloadOnFocus from '../hooks/useReloadOnFocus';
  */
 export default function TeamsPage() {
   const { user } = useAuth();
+  const isCompact = useIsCompact();
 
   // ─── 全データを 1 度に取得 ───
   const [profiles, setProfiles]         = useState([]);
@@ -213,7 +215,11 @@ export default function TeamsPage() {
           </p>
         </div>
         {view.canCreate && (
-          <Button Icon={Plus} onClick={() => setCreateOpen(true)}>
+          <Button
+            Icon={Plus}
+            size={isCompact ? 'sm' : 'md'}
+            onClick={() => setCreateOpen(true)}
+          >
             チームを作成
           </Button>
         )}

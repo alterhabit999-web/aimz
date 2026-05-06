@@ -18,6 +18,7 @@ import {
 import ProjectCard from '../components/projects/ProjectCard';
 import ProjectFormModal from '../components/projects/ProjectFormModal';
 import useReloadOnFocus from '../hooks/useReloadOnFocus';
+import useIsCompact from '../hooks/useIsCompact';
 
 /**
  * ProjectsPage — 案件一覧（PHASE 3 で実 DB 化）。
@@ -30,6 +31,7 @@ const STATUS_FILTERS = ['すべて', '未着手', '進行中', '完了', '保留
 
 export default function ProjectsPage() {
   const { user } = useAuth();
+  const isCompact = useIsCompact();
 
   // 取得データ
   const [profiles, setProfiles]           = useState([]);
@@ -187,7 +189,11 @@ export default function ProjectsPage() {
           </p>
         </div>
         {view.canCreate && (
-          <Button Icon={Plus} onClick={() => setCreateOpen(true)}>
+          <Button
+            Icon={Plus}
+            size={isCompact ? 'sm' : 'md'}
+            onClick={() => setCreateOpen(true)}
+          >
             案件を作成
           </Button>
         )}

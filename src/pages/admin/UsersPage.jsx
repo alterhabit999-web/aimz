@@ -27,6 +27,7 @@ import {
 import InviteUserModal from '../../components/users/InviteUserModal';
 import EditUserModal from '../../components/users/EditUserModal';
 import useReloadOnFocus from '../../hooks/useReloadOnFocus';
+import useIsCompact from '../../hooks/useIsCompact';
 
 /**
  * UsersPage — ユーザー管理（仕様 3-2 / 3-14）。
@@ -40,6 +41,7 @@ import useReloadOnFocus from '../../hooks/useReloadOnFocus';
  * チームメンバーシップ判定はまだダミー（後続フェーズで実 DB 化）。
  */
 export default function UsersPage() {
+  const isCompact = useIsCompact();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all'); // all | admin | leader | active | inactive
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -170,7 +172,11 @@ export default function UsersPage() {
             ユーザーの招待・権限変更・停止・削除を行います（管理者のみ）
           </p>
         </div>
-        <Button Icon={UserPlus} onClick={() => setInviteOpen(true)}>
+        <Button
+          Icon={UserPlus}
+          size={isCompact ? 'sm' : 'md'}
+          onClick={() => setInviteOpen(true)}
+        >
           ユーザーを招待
         </Button>
       </div>
@@ -236,12 +242,12 @@ export default function UsersPage() {
         </span>
       </div>
 
-      {/* テーブル */}
+      {/* テーブル（横スクロール対応） */}
       <div style={{
         background: C.surface,
         border: `1px solid ${C.border}`,
         borderRadius: '8px',
-        overflow: 'hidden',
+        overflow: 'auto',
         boxShadow: C.shadow1,
       }}>
         {loading ? (
@@ -278,6 +284,7 @@ export default function UsersPage() {
                   user={u}
                   memberships={membershipsOfUser(u.id)}
                   leader={isTeamLeaderOf(u.id)}
+                  iconOnly={isCompact}
                   onEdit={() => setEditTarget(u)}
                   onDelete={() => setDeleteTarget(u)}
                 />
@@ -326,7 +333,7 @@ export default function UsersPage() {
 // ============================================================
 // UserRow
 // ============================================================
-function UserRow({ user, memberships = [], leader, onEdit, onDelete }) {
+function UserRow({ user, memberships = [], leader, iconOnly = false, onEdit, onDelete }) {
   const active = user.is_active !== false;
 
   return (
@@ -421,10 +428,10 @@ function UserRow({ user, memberships = [], leader, onEdit, onDelete }) {
       {/* 操作 */}
       <Td align="right">
         <div style={{ display: 'inline-flex', gap: S.xs }}>
-          <Button variant="secondary" size="sm" Icon={Pencil} onClick={onEdit}>
+          <Button variant="secondary" size="sm" Icon={Pencil} iconOnly={iconOnly} onClick={onEdit}>
             編集
           </Button>
-          <Button variant="danger" size="sm" Icon={Trash2} onClick={onDelete}>
+          <Button variant="danger" size="sm" Icon={Trash2} iconOnly={iconOnly} onClick={onDelete}>
             削除
           </Button>
         </div>

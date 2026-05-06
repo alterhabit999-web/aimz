@@ -55,12 +55,12 @@ export default function MembersTable({ members }) {
         />
       </div>
 
-      {/* テーブル */}
+      {/* テーブル（横スクロール対応） */}
       <div style={{
         background: C.surface,
         border: `1px solid ${C.border}`,
         borderRadius: '8px',
-        overflow: 'hidden',
+        overflow: 'auto',
         boxShadow: C.shadow1,
       }}>
         {filtered.length === 0 ? (

@@ -6,6 +6,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import DepartmentFormModal from '../../components/departments/DepartmentFormModal';
 import DepartmentMembersModal from '../../components/departments/DepartmentMembersModal';
 import useReloadOnFocus from '../../hooks/useReloadOnFocus';
+import useIsCompact from '../../hooks/useIsCompact';
 import {
   listDepartments,
   createDepartment,
@@ -25,6 +26,7 @@ import {
  * 配下チームがある部署を削除した時の整合性チェックも、teams 実 DB 化後に追加予定。
  */
 export default function AdminDepartmentsPage() {
+  const isCompact = useIsCompact();
   const [departments, setDepartments] = useState([]);
   const [teams, setTeams]             = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -126,17 +128,21 @@ export default function AdminDepartmentsPage() {
             部署の作成・編集・削除を行います（管理者のみ）
           </p>
         </div>
-        <Button Icon={Plus} onClick={() => setCreateOpen(true)}>
+        <Button
+          Icon={Plus}
+          size={isCompact ? 'sm' : 'md'}
+          onClick={() => setCreateOpen(true)}
+        >
           部署を作成
         </Button>
       </div>
 
-      {/* テーブル */}
+      {/* テーブル（横スクロール対応） */}
       <div style={{
         background: C.surface,
         border: `1px solid ${C.border}`,
         borderRadius: '8px',
-        overflow: 'hidden',
+        overflow: 'auto',
         boxShadow: C.shadow1,
       }}>
         {loading ? (
@@ -169,6 +175,7 @@ export default function AdminDepartmentsPage() {
                   key={dept.id}
                   department={dept}
                   stats={statsByDept.get(dept.id) || { teamCount: 0, memberCount: 0 }}
+                  iconOnly={isCompact}
                   onEdit={() => setEditTarget(dept)}
                   onDelete={() => setDeleteTarget(dept)}
                   onMembers={() => setMembersTarget(dept)}
@@ -221,7 +228,7 @@ export default function AdminDepartmentsPage() {
   );
 }
 
-function DepartmentRow({ department, stats, onEdit, onDelete, onMembers }) {
+function DepartmentRow({ department, stats, iconOnly = false, onEdit, onDelete, onMembers }) {
   const { teamCount = 0, memberCount = 0 } = stats || {};
 
   return (
@@ -249,13 +256,13 @@ function DepartmentRow({ department, stats, onEdit, onDelete, onMembers }) {
       </Td>
       <Td align="right">
         <div style={{ display: 'inline-flex', gap: S.xs }}>
-          <Button variant="secondary" size="sm" Icon={Users} onClick={onMembers}>
+          <Button variant="secondary" size="sm" Icon={Users} iconOnly={iconOnly} onClick={onMembers}>
             メンバー
           </Button>
-          <Button variant="secondary" size="sm" Icon={Pencil} onClick={onEdit}>
+          <Button variant="secondary" size="sm" Icon={Pencil} iconOnly={iconOnly} onClick={onEdit}>
             編集
           </Button>
-          <Button variant="danger" size="sm" Icon={Trash2} onClick={onDelete}>
+          <Button variant="danger" size="sm" Icon={Trash2} iconOnly={iconOnly} onClick={onDelete}>
             削除
           </Button>
         </div>

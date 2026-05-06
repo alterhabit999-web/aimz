@@ -157,7 +157,7 @@ export default function TaskListTab({ project }) {
           background: C.surface,
           border: `1px solid ${C.border}`,
           borderRadius: '8px',
-          overflow: 'hidden',
+          overflow: 'auto',
           boxShadow: C.shadow1,
         }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.857rem' }}>
