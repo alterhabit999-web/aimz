@@ -118,10 +118,11 @@ export default function AdminDepartmentsPage() {
         alignItems: 'flex-end',
         justifyContent: 'space-between',
         gap: S.m,
+        flexWrap: 'wrap',
         marginBottom: S.l,
       }}>
         <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: C.text, margin: 0 }}>
+          <h1 style={{ fontSize: 'clamp(1.05rem, 4vw, 1.5rem)', fontWeight: 700, color: C.text, margin: 0 }}>
             部署管理
           </h1>
           <p style={{ color: C.textSub, fontSize: '0.857rem', marginTop: S.xs, marginBottom: 0 }}>

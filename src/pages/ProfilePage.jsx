@@ -81,7 +81,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: C.text, margin: 0, marginBottom: S.l }}>
+        <h1 style={{ fontSize: 'clamp(1.05rem, 4vw, 1.5rem)', fontWeight: 700, color: C.text, margin: 0, marginBottom: S.l }}>
           マイページ
         </h1>
         <div style={{ padding: S.xl, textAlign: 'center', color: C.textMuted }}>
@@ -94,7 +94,7 @@ export default function ProfilePage() {
   if (error) {
     return (
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: C.text, margin: 0, marginBottom: S.l }}>
+        <h1 style={{ fontSize: 'clamp(1.05rem, 4vw, 1.5rem)', fontWeight: 700, color: C.text, margin: 0, marginBottom: S.l }}>
           マイページ
         </h1>
         <div style={{ padding: S.xl, textAlign: 'center', color: C.danger }}>
@@ -112,7 +112,7 @@ export default function ProfilePage() {
 
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: C.text, margin: 0, marginBottom: S.l }}>
+      <h1 style={{ fontSize: 'clamp(1.05rem, 4vw, 1.5rem)', fontWeight: 700, color: C.text, margin: 0, marginBottom: S.l }}>
         マイページ
       </h1>
 

@@ -36,3 +36,14 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #aaa69f;
 }
+
+/* ─── レスポンシブ：狭い画面（< 900px）での密度調整 ─── */
+@media (max-width: 899px) {
+  /* テーブルセル padding を圧縮（インラインスタイルより優先するため !important） */
+  table th,
+  table td {
+    padding: 6px 8px !important;
+  }
+  /* カードの基本 padding を少し詰める */
+  body { font-size: 15px; }
+}

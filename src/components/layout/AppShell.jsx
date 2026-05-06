@@ -11,6 +11,7 @@ import {
   listDepartments,
 } from '../../api';
 import useReloadOnFocus from '../../hooks/useReloadOnFocus';
+import useIsCompact from '../../hooks/useIsCompact';
 
 /**
  * AppShell — ログイン後の全ページに共通する枠組み。
@@ -23,7 +24,9 @@ import useReloadOnFocus from '../../hooks/useReloadOnFocus';
  */
 export default function AppShell() {
   const { user } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isCompact = useIsCompact();
+  // 狭い時はサイドバーを初期非表示にしてメイン領域を確保する
+  const [sidebarOpen, setSidebarOpen] = useState(!isCompact);
 
   const [unreadCount, setUnreadCount]       = useState(0);
   const [myDepartments, setMyDepartments]   = useState([]);
@@ -67,7 +70,7 @@ export default function AppShell() {
           unreadCount={unreadCount}
         />
 
-        <main style={{ flex: 1, overflow: 'auto', padding: S.l }}>
+        <main style={{ flex: 1, overflow: 'auto', padding: isCompact ? S.s : S.l }}>
           <Outlet />
         </main>
       </div>

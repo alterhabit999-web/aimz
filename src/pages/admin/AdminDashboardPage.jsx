@@ -156,7 +156,7 @@ export default function AdminDashboardPage() {
     <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
       {/* ヘッダー */}
       <div style={{ marginBottom: S.l }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: C.text, margin: 0 }}>
+        <h1 style={{ fontSize: 'clamp(1.05rem, 4vw, 1.5rem)', fontWeight: 700, color: C.text, margin: 0 }}>
           管理者ダッシュボード
         </h1>
         <p style={{ color: C.textSub, fontSize: '0.857rem', marginTop: S.xs, marginBottom: 0 }}>
@@ -279,7 +279,7 @@ function SummaryCard({ Icon, label, value, danger, to }) {
           {label}
         </div>
         <div style={{
-          fontSize: '1.5rem',
+          fontSize: 'clamp(1.05rem, 4vw, 1.5rem)',
           fontWeight: 700,
           color: isDanger ? C.danger : C.text,
           fontVariantNumeric: 'tabular-nums',

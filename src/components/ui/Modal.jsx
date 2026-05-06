@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { C, S, ICON_MD } from '../../styles/tokens';
+import useIsCompact from '../../hooks/useIsCompact';
 
 /**
  * Modal — 中央表示のダイアログ。
@@ -17,6 +18,7 @@ import { C, S, ICON_MD } from '../../styles/tokens';
  */
 export default function Modal({ open, title, onClose, width = '520px', footer, children }) {
   const dialogRef = useRef(null);
+  const isCompact = useIsCompact();
 
   // Esc で閉じる
   useEffect(() => {
@@ -53,7 +55,7 @@ export default function Modal({ open, title, onClose, width = '520px', footer, c
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'center',
-        padding: `${S.xl} ${S.l}`,
+        padding: isCompact ? `${S.m} ${S.s}` : `${S.xl} ${S.l}`,
         overflowY: 'auto',
       }}
     >
@@ -64,31 +66,36 @@ export default function Modal({ open, title, onClose, width = '520px', footer, c
         aria-labelledby="modal-title"
         style={{
           width: '100%',
-          maxWidth: width,
+          // 画面幅を超えないように常に内側に収める
+          maxWidth: `min(${width}, calc(100vw - ${isCompact ? '16px' : '32px'}))`,
           background: C.surface,
           borderRadius: '8px',
           boxShadow: C.shadow2,
           display: 'flex',
           flexDirection: 'column',
-          maxHeight: 'calc(100vh - 64px)',
+          maxHeight: 'calc(100vh - 32px)',
           overflow: 'hidden',
         }}
       >
         {/* ヘッダー */}
         <div style={{
-          padding: `${S.m} ${S.l}`,
+          padding: isCompact ? `${S.s} ${S.m}` : `${S.m} ${S.l}`,
           borderBottom: `1px solid ${C.border}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: S.m,
+          gap: S.s,
           flexShrink: 0,
         }}>
           <h2 id="modal-title" style={{
-            fontSize: '1.2rem',
+            fontSize: 'clamp(1rem, 3vw, 1.2rem)',
             fontWeight: 700,
             color: C.text,
             margin: 0,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}>
             {title}
           </h2>
@@ -112,7 +119,7 @@ export default function Modal({ open, title, onClose, width = '520px', footer, c
 
         {/* 本文（スクロール領域） */}
         <div style={{
-          padding: S.l,
+          padding: isCompact ? S.m : S.l,
           overflowY: 'auto',
           flex: 1,
         }}>
@@ -122,13 +129,14 @@ export default function Modal({ open, title, onClose, width = '520px', footer, c
         {/* フッター */}
         {footer && (
           <div style={{
-            padding: `${S.m} ${S.l}`,
+            padding: isCompact ? `${S.s} ${S.m}` : `${S.m} ${S.l}`,
             borderTop: `1px solid ${C.border}`,
             background: C.bg,
             display: 'flex',
             justifyContent: 'flex-end',
             gap: S.s,
             flexShrink: 0,
+            flexWrap: 'wrap',
           }}>
             {footer}
           </div>

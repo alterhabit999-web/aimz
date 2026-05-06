@@ -127,7 +127,7 @@ export default function DashboardPage() {
       {/* 挨拶 */}
       <div style={{ marginBottom: S.l }}>
         <h1 style={{
-          fontSize: '1.5rem',
+          fontSize: 'clamp(1.05rem, 4vw, 1.5rem)',
           fontWeight: 700,
           color: C.text,
           margin: 0,
