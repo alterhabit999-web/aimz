@@ -88,17 +88,19 @@ export default function InvitationAcceptPage() {
     if (password !== confirmPwd) { setSubmitError('パスワードと確認用が一致しません'); return; }
 
     setSubmitting(true);
+    let phase = '初期化';
     try {
       // a. Appwrite Auth ユーザー作成（カスタム ID）
+      phase = 'アカウント作成';
       const userId = ID.unique();
       await account.create(userId, invitation.email, password, fullName.trim());
 
       // b. 自動ログイン（先にセッションを確立）
-      //    AuthContext.login は内部で getProfile を呼ぶが、まだ profile が無いので
-      //    Auth の name/email にフォールバックする（問題なし）
+      phase = 'ログイン';
       await login(invitation.email, password);
 
       // c. profiles に同じ ID で登録（ログイン後なので Role.users() の create が通る）
+      phase = 'プロフィール作成';
       await createProfile({
         userId,
         full_name: fullName.trim(),
@@ -107,28 +109,34 @@ export default function InvitationAcceptPage() {
       });
 
       // d. 招待を消化済みに（ログイン後）
+      phase = '招待トークンの消化';
       try {
         await markInvitationUsed(invitation.id);
       } catch (err) {
-        // 消化記録に失敗しても致命的ではないのでログだけ
         console.warn('markInvitationUsed:', err?.message);
       }
 
       // e. AuthContext を再取得してプロフィール内容（is_admin 含む）を反映
+      phase = 'プロフィール再取得';
       try { await refresh(); } catch (_) {}
 
       // f. ダッシュボードへ
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      console.error(err);
+      console.error(`[InvitationAccept:${phase}]`, err);
       // よくあるエラーメッセージを日本語化
-      let msg = err?.message || 'アカウント作成に失敗しました';
-      if (/already exists|email|already/i.test(msg)) {
+      let raw = err?.message || 'アカウント作成に失敗しました';
+      let msg;
+      if (/already exists|user.*already|email.*already/i.test(raw)) {
         msg = 'このメールアドレスは既に登録されています。ログイン画面からログインしてください。';
-      } else if (/password.*8|short/i.test(msg)) {
+      } else if (/password.*8|short|password must/i.test(raw)) {
         msg = 'パスワードは 8 文字以上にしてください';
-      } else if (/session is active|prohibited/i.test(msg)) {
+      } else if (/session is active|prohibited/i.test(raw)) {
         msg = '既にログイン中です。ログアウトしてから再度お試しください。';
+      } else if (/not authorized/i.test(raw)) {
+        msg = `権限エラー（${phase}）：${raw}`;
+      } else {
+        msg = `${phase}でエラー：${raw}`;
       }
       setSubmitError(msg);
       setSubmitting(false);

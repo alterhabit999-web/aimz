@@ -103,8 +103,8 @@ export default function UsersPage() {
     const q = query.trim().toLowerCase();
     return profiles.filter(u => {
       const matchQ = !q ||
-        u.full_name.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q);
+        (u.full_name || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q);
       const matchF = (() => {
         if (filter === 'admin')    return u.is_admin;
         if (filter === 'leader')   return !u.is_admin && isTeamLeaderOf(u.id);

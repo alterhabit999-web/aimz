@@ -26,7 +26,7 @@ export default function MembersTable({ members }) {
     const q = query.trim().toLowerCase();
     if (!q) return members;
     return members.filter(m =>
-      m.full_name.toLowerCase().includes(q) ||
+      (m.full_name || '').toLowerCase().includes(q) ||
       m.email?.toLowerCase().includes(q)
     );
   }, [members, query]);

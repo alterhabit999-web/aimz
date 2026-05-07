@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { C, S } from '../../styles/tokens';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import ErrorBoundary from './ErrorBoundary';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   listNotificationsForUser,
@@ -71,7 +72,9 @@ export default function AppShell() {
         />
 
         <main style={{ flex: 1, overflow: 'auto', padding: isCompact ? S.s : S.l }}>
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
