@@ -77,3 +77,29 @@ export async function markInvitationUsed(id) {
 export async function deleteInvitation(id) {
   return databases.deleteDocument(DATABASE_ID, COL, id);
 }
+
+/**
+ * 招待を再発行する：トークンと有効期限を新しくする。
+ * 既存招待のメタ（is_admin / message / invited_by）は引き継ぐ。
+ *   旧 token は破棄され、旧 URL は無効になる。
+ */
+export async function reissueInvitation(id, { expiresInDays = 7 } = {}) {
+  const expires = new Date();
+  expires.setDate(expires.getDate() + expiresInDays);
+  const doc = await databases.updateDocument(DATABASE_ID, COL, id, {
+    token: generateInviteToken(),
+    is_used: false,
+    expires_at: expires.toISOString(),
+  });
+  return normalize(doc);
+}
+
+/** 状態判定（未使用 / 使用済み / 期限切れ） */
+export function invitationStatus(invitation) {
+  if (!invitation) return 'unknown';
+  if (invitation.is_used) return 'used';
+  if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
+    return 'expired';
+  }
+  return 'active';
+}

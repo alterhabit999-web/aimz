@@ -8,6 +8,7 @@ import {
   Crown,
   CheckCircle2,
   XCircle,
+  Mail,
 } from 'lucide-react';
 import { C, S, ICON_SM } from '../../styles/tokens';
 import Avatar from '../../components/ui/Avatar';
@@ -26,6 +27,8 @@ import {
 } from '../../api';
 import InviteUserModal from '../../components/users/InviteUserModal';
 import EditUserModal from '../../components/users/EditUserModal';
+import InvitationsModal from '../../components/users/InvitationsModal';
+import { useAuth } from '../../contexts/AuthContext';
 import useReloadOnFocus from '../../hooks/useReloadOnFocus';
 import useIsCompact from '../../hooks/useIsCompact';
 
@@ -41,10 +44,12 @@ import useIsCompact from '../../hooks/useIsCompact';
  * チームメンバーシップ判定はまだダミー（後続フェーズで実 DB 化）。
  */
 export default function UsersPage() {
+  const { user } = useAuth();
   const isCompact = useIsCompact();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all'); // all | admin | leader | active | inactive
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -173,13 +178,23 @@ export default function UsersPage() {
             ユーザーの招待・権限変更・停止・削除を行います（管理者のみ）
           </p>
         </div>
-        <Button
-          Icon={UserPlus}
-          size={isCompact ? 'sm' : 'md'}
-          onClick={() => setInviteOpen(true)}
-        >
-          ユーザーを招待
-        </Button>
+        <div style={{ display: 'flex', gap: S.xs, flexWrap: 'wrap' }}>
+          <Button
+            Icon={Mail}
+            variant="secondary"
+            size={isCompact ? 'sm' : 'md'}
+            onClick={() => setHistoryOpen(true)}
+          >
+            招待履歴
+          </Button>
+          <Button
+            Icon={UserPlus}
+            size={isCompact ? 'sm' : 'md'}
+            onClick={() => setInviteOpen(true)}
+          >
+            ユーザーを招待
+          </Button>
+        </div>
       </div>
 
       {/* フィルターバー */}
@@ -300,6 +315,12 @@ export default function UsersPage() {
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
         onInvited={handleInvited}
+      />
+
+      <InvitationsModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        currentUser={user}
       />
 
       <EditUserModal

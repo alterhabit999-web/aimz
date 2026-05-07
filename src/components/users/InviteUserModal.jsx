@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Copy, Check, Shield } from 'lucide-react';
+import { Mail, Copy, Check, Shield, Send } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import FormField, { inputStyle } from '../ui/FormField';
@@ -89,6 +89,26 @@ export default function InviteUserModal({ open, onClose, onInvited }) {
     } catch {
       // 古いブラウザのフォールバック等は割愛
     }
+  };
+
+  const handleMailto = () => {
+    const subject = encodeURIComponent('AimZ への招待');
+    const lines = [
+      `${email} 様`,
+      '',
+      'AimZ にご招待します。下記のリンクからアカウントを作成してください。',
+      '',
+      inviteUrl,
+      '',
+    ];
+    if (message?.trim()) {
+      lines.push('--- 招待メッセージ ---');
+      lines.push(message.trim());
+      lines.push('');
+    }
+    lines.push('有効期限：発行から 7 日');
+    const body = encodeURIComponent(lines.join('\n'));
+    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -217,6 +237,13 @@ export default function InviteUserModal({ open, onClose, onInvited }) {
             </code>
             <Button size="sm" variant="secondary" Icon={copied ? Check : Copy} onClick={handleCopy}>
               {copied ? 'コピー済み' : 'コピー'}
+            </Button>
+          </div>
+
+          {/* メーラー起動 */}
+          <div style={{ marginTop: S.s, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button size="sm" variant="secondary" Icon={Send} onClick={handleMailto}>
+              メーラーで招待を送る
             </Button>
           </div>
 
