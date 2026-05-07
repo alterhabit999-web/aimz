@@ -209,39 +209,57 @@ async function ensureIndex(col, idx) {
   }
 }
 
-// ─── Storage Bucket の権限同期 ───
-async function ensureStorageBucket() {
-  if (!STORAGE_BUCKET_ID) {
-    console.log('  ☑ STORAGE_BUCKET_ID 未設定（skip）');
+// ─── Storage Bucket の汎用 ensure（無ければ作成 / あれば更新） ───
+async function ensureBucket(bucketId, name, options = {}) {
+  if (!bucketId) {
+    console.log(`  ☑ ${name}：bucketId 未設定（skip）`);
     return;
   }
-  console.log(`◆ storage bucket: ${STORAGE_BUCKET_ID}`);
+  const {
+    permissions = AUTHED_USERS_PERMISSIONS,
+    fileSecurity = false,
+    enabled = true,
+    maxFileSize,
+    allowedExtensions,
+    compression = 'none',
+    encryption = true,
+    antivirus = true,
+  } = options;
+
+  console.log(`◆ storage bucket: ${bucketId}`);
   try {
-    const bucket = await storage.getBucket(STORAGE_BUCKET_ID);
-    // PHASE 4 Step D：認証済みユーザーのみアップロード/参照可能
+    await storage.getBucket(bucketId);
     await storage.updateBucket(
-      STORAGE_BUCKET_ID,
-      bucket.name || 'AimZ Files',
-      AUTHED_USERS_PERMISSIONS,
-      bucket.fileSecurity ?? false,
-      bucket.enabled ?? true,
-      // 50 MB 上限（仕様書 3-7）— Appwrite の上限が 50,000,000 なので 10 進換算
-      50_000_000,
-      // 許可拡張子（仕様書 3-7）
-      ['png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx'],
-      bucket.compression ?? 'none',
-      bucket.encryption ?? true,
-      bucket.antivirus ?? true,
+      bucketId, name, permissions, fileSecurity, enabled,
+      maxFileSize, allowedExtensions, compression, encryption, antivirus,
     );
     console.log('  ☑ permissions / 制限を更新');
   } catch (err) {
-    if (err?.code === 404) {
-      console.log('  ⚠ bucket が見つかりません。Appwrite Console で先に作成してください。');
-    } else {
+    if (err?.code !== 404) {
       console.error('  ✗ bucket 更新エラー:', err?.message);
+      return;
+    }
+    try {
+      await storage.createBucket(
+        bucketId, name, permissions, fileSecurity, enabled,
+        maxFileSize, allowedExtensions, compression, encryption, antivirus,
+      );
+      console.log(`  ✓ bucket 新規作成`);
+    } catch (e2) {
+      console.error('  ✗ bucket 作成エラー:', e2?.message);
     }
   }
 }
+
+// 既存の案件ファイル用 Bucket（50MB / PDF/Office 含む）
+async function ensureProjectFilesBucket() {
+  return ensureBucket(STORAGE_BUCKET_ID, 'AimZ Files', {
+    maxFileSize: 50_000_000,
+    allowedExtensions: ['png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx'],
+  });
+}
+
+
 
 // ─── メイン ───
 async function main() {
@@ -265,7 +283,7 @@ async function main() {
     console.log('');
   }
 
-  await ensureStorageBucket();
+  await ensureProjectFilesBucket();
   console.log('');
 
   console.log('✅ Appwrite セットアップ完了');
