@@ -30,6 +30,7 @@
     "seed:appwrite": "node scripts/seed.js",
     "seed:auth-users": "node scripts/seed-auth-users.js",
     "sync:profile-emails": "node scripts/sync-profile-emails.js",
+    "fix:invitations-permissions": "node scripts/fix-invitations-permissions.js",
     "cleanup:orphans": "node scripts/cleanup-orphans.js"
   },
   "eslintConfig": {

@@ -20,17 +20,23 @@ import { useAuth } from '../contexts/AuthContext';
  *   2. 氏名・パスワード入力フォームを表示（メールは invitation 由来で固定）
  *   3. submit：
  *        a. account.create(ID.unique(), email, password, full_name)
- *        b. createProfile({ userId: 同じ id, full_name, email, is_admin })
- *        c. markInvitationUsed(invitation.id)
- *        d. account.createEmailPasswordSession で自動ログイン
- *        e. ダッシュボードへ
+ *        b. account.createEmailPasswordSession で自動ログイン（先に！）
+ *        c. createProfile({ userId: 同じ id, full_name, email, is_admin }) ← ログイン後
+ *        d. markInvitationUsed(invitation.id) ← ログイン後
+ *        e. AuthContext を refresh してプロフィール反映
+ *        f. ダッシュボードへ
+ *
+ * ※ b 〜 d の順序が重要：profiles / invitations の create/update は Role.users()
+ *    なので、未ログイン状態では弾かれる。account.create で Auth ユーザーを作った直後に
+ *    まず login してセッションを確立し、その後に profiles 作成・招待消化を行う。
+ *    invitations の read だけは Role.any() で公開（トークン検証用、PHASE 4 例外）。
  *
  * このページは RequireAuth の外側で公開する（未ログイン状態でもアクセス可能）。
  */
 export default function InvitationAcceptPage() {
   const { token } = useParams();
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, refresh } = useAuth();
 
   const [invitation, setInvitation] = useState(null);
   const [loadError, setLoadError]   = useState('');
@@ -87,7 +93,12 @@ export default function InvitationAcceptPage() {
       const userId = ID.unique();
       await account.create(userId, invitation.email, password, fullName.trim());
 
-      // b. profiles に同じ ID で登録
+      // b. 自動ログイン（先にセッションを確立）
+      //    AuthContext.login は内部で getProfile を呼ぶが、まだ profile が無いので
+      //    Auth の name/email にフォールバックする（問題なし）
+      await login(invitation.email, password);
+
+      // c. profiles に同じ ID で登録（ログイン後なので Role.users() の create が通る）
       await createProfile({
         userId,
         full_name: fullName.trim(),
@@ -95,7 +106,7 @@ export default function InvitationAcceptPage() {
         is_admin: !!invitation.is_admin,
       });
 
-      // c. 招待を消化済みに
+      // d. 招待を消化済みに（ログイン後）
       try {
         await markInvitationUsed(invitation.id);
       } catch (err) {
@@ -103,10 +114,10 @@ export default function InvitationAcceptPage() {
         console.warn('markInvitationUsed:', err?.message);
       }
 
-      // d. 自動ログイン
-      await login(invitation.email, password);
+      // e. AuthContext を再取得してプロフィール内容（is_admin 含む）を反映
+      try { await refresh(); } catch (_) {}
 
-      // e. ダッシュボードへ
+      // f. ダッシュボードへ
       navigate('/dashboard', { replace: true });
     } catch (err) {
       console.error(err);
@@ -114,6 +125,10 @@ export default function InvitationAcceptPage() {
       let msg = err?.message || 'アカウント作成に失敗しました';
       if (/already exists|email|already/i.test(msg)) {
         msg = 'このメールアドレスは既に登録されています。ログイン画面からログインしてください。';
+      } else if (/password.*8|short/i.test(msg)) {
+        msg = 'パスワードは 8 文字以上にしてください';
+      } else if (/session is active|prohibited/i.test(msg)) {
+        msg = '既にログイン中です。ログアウトしてから再度お試しください。';
       }
       setSubmitError(msg);
       setSubmitting(false);
