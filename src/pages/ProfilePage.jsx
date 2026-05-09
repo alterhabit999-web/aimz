@@ -336,18 +336,16 @@ function ProfileEditor({ profile, onSaved }) {
       </FormField>
 
       <FormField label="プロフィール画像" hint="PNG / JPG（最大 5 MB）。クリック または ドラッグ&ドロップ">
-        <div
+        {/*
+          <label> で input を包むことで、クリックは label → input にネイティブ伝搬する。
+          以前は <div onClick={() => input.click()}> + 内側に input という構成で、
+          プログラマティック click が親にバブルして二重発火し、選択結果が破棄される
+          ブラウザがあったため、<label> 方式に変更（v15.1）。
+        */}
+        <label
+          htmlFor="avatar-file-input"
           onDrop={onDrop}
           onDragOver={onDragOver}
-          onClick={() => fileInputRef.current?.click()}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              fileInputRef.current?.click();
-            }
-          }}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -376,20 +374,23 @@ function ProfileEditor({ profile, onSaved }) {
             </div>
             <div style={{ fontSize: '0.75rem', color: C.textMuted, marginTop: '2px' }}>
               {pendingFile
-                ? `${(pendingFile.size / 1024).toFixed(0)} KB / ${pendingFile.type}`
+                ? `${(pendingFile.size / 1024).toFixed(0)} KB${pendingFile.type ? ` / ${pendingFile.type}` : ''}`
                 : (removeAvatar
                     ? '保存時に画像を削除します'
                     : (savedUrl ? '現在の画像が設定されています' : '画像は未設定'))}
             </div>
           </div>
           <input
+            id="avatar-file-input"
             ref={fileInputRef}
             type="file"
             accept={AVATAR_ACCEPT.join(',')}
             onChange={onFileChange}
+            // 同じファイルを再選択しても onChange が発火するよう、開く直前に value をクリア
+            onClick={(e) => { e.currentTarget.value = ''; }}
             style={{ display: 'none' }}
           />
-        </div>
+        </label>
 
         {/* アクションボタン */}
         <div style={{ display: 'flex', gap: S.xs, marginTop: S.s, flexWrap: 'wrap' }}>
