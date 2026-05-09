@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { User, Lock, LogOut, Crown, Shield, Upload, Trash2 } from 'lucide-react';
 import { C, S } from '../styles/tokens';
 import Card from '../components/ui/Card';
@@ -44,9 +44,14 @@ export default function ProfilePage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
 
+  // 初回のみ全画面ローディング、以降はバックグラウンド更新（ProfileEditor の
+  // unmount を防ぐため）。ファイル選択中にフォーカスイベントで reload しても
+  // 編集中の state が消えないようにする（v18 の重要修正）。
+  const initialLoadRef = useRef(true);
+
   const reload = useCallback(async () => {
     if (!user?.id) return;
-    setLoading(true);
+    if (initialLoadRef.current) setLoading(true);
     setError(null);
     try {
       const [p, tm, t, d] = await Promise.all([
@@ -64,6 +69,7 @@ export default function ProfilePage() {
       setError(err?.message || 'プロフィール情報の取得に失敗しました');
     } finally {
       setLoading(false);
+      initialLoadRef.current = false;
     }
   }, [user?.id]);
 
