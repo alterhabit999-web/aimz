@@ -190,6 +190,7 @@ export default function ProfilePage() {
 // プロフィール編集
 // ============================================================
 function ProfileEditor({ profile, onSaved }) {
+  console.log('[avatar] ProfileEditor RENDER', new Date().toISOString());
   const fileInputRef = useRef(null);
 
   const [name, setName]                 = useState(profile.full_name || '');
