@@ -4,8 +4,9 @@ node_modules/
 # ビルド成果物
 build/
 
-# 環境変数（Appwrite の秘密情報が含まれるため絶対に除外）
-.env
+# 環境変数
+# .env はフロントエンド公開値（REACT_APP_*）のみを置く運用なので git 管理する。
+# 秘匿情報（APPWRITE_API_KEY 等）は必ず .env.local に置くこと（このファイルは除外）。
 .env.local
 .env.development.local
 .env.test.local

@@ -14,6 +14,7 @@
  *   npm run cleanup:orphans -- --apply   # 実際に削除
  */
 
+require('dotenv').config({ path: '.env.local' });
 require('dotenv').config();
 const { Client, Databases, Storage, Query } = require('node-appwrite');
 

@@ -12,6 +12,7 @@
  *   npm run fix:invitations-permissions
  */
 
+require('dotenv').config({ path: '.env.local' });
 require('dotenv').config();
 const { Client, Databases, Permission, Role } = require('node-appwrite');
 

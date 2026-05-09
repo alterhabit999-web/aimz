@@ -15,6 +15,7 @@
  *   - API キーには Database > collections.read / collections.write / databases.read / attributes.* / indexes.* スコープが必要
  */
 
+require('dotenv').config({ path: '.env.local' });
 require('dotenv').config();
 const { Client, Databases, Storage, Permission, Role, ID } = require('node-appwrite');
 const { collections } = require('./schema');

@@ -14,6 +14,7 @@
  *   PHASE 5（本番デプロイ）前にこのスクリプトを実行しないようにすること。
  */
 
+require('dotenv').config({ path: '.env.local' });
 require('dotenv').config();
 const { Client, Users } = require('node-appwrite');
 

@@ -16,6 +16,7 @@
  *   npm run sync:profile-emails
  */
 
+require('dotenv').config({ path: '.env.local' });
 require('dotenv').config();
 const { Client, Users, Databases } = require('node-appwrite');
 

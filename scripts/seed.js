@@ -10,6 +10,7 @@
  *   - 失敗してもなるべく続行する（ログだけ残す）
  */
 
+require('dotenv').config({ path: '.env.local' });
 require('dotenv').config();
 const { Client, Databases } = require('node-appwrite');
 const seed = require('./seed-data');
