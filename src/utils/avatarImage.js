@@ -40,59 +40,41 @@ export function validateImageFile(file) {
  *     （非同期跨ぎだと user activation を失って picker が開かないブラウザがある）
  */
 export function pickImageFile() {
-  console.log('[avatar] pickImageFile: start');
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = ALLOWED_MIMES.join(',');
-    console.log('[avatar] pickImageFile: input created', input);
 
     let resolved = false;
-    const settle = (file, source) => {
-      if (resolved) {
-        console.log('[avatar] settle ignored (already resolved):', source);
-        return;
-      }
+    const settle = (file) => {
+      if (resolved) return;
       resolved = true;
-      console.log('[avatar] settle:', source, 'file=', file);
-      // 入力要素は次の tick で破棄
-      setTimeout(() => {
-        try { input.remove(); } catch (_) {}
-      }, 0);
+      // 入力要素は次の tick で破棄（onchange のあと）
+      setTimeout(() => { try { input.remove(); } catch (_) {} }, 0);
       resolve(file);
     };
 
-    input.onchange = () => {
-      console.log('[avatar] onchange fired, files=', input.files);
-      settle(input.files?.[0] || null, 'onchange');
-    };
-    input.oninput = () => {
-      console.log('[avatar] oninput fired, files=', input.files);
-      // onchange のバックアップ（一部ブラウザ向け）
-      if (input.files && input.files.length > 0) {
-        settle(input.files[0], 'oninput');
-      }
+    input.onchange = () => settle(input.files?.[0] || null);
+    // 一部ブラウザのバックアップ
+    input.oninput  = () => {
+      if (input.files && input.files.length > 0) settle(input.files[0]);
     };
 
     // フォーカス復帰でのキャンセル検出（onchange が発火しない場合のセーフティ）
     const handleFocus = () => {
-      console.log('[avatar] window focus event');
       window.removeEventListener('focus', handleFocus);
       setTimeout(() => {
-        console.log('[avatar] focus fallback check, resolved=', resolved, 'files=', input.files);
-        if (!resolved && (!input.files || input.files.length === 0)) settle(null, 'focus-cancel');
+        if (!resolved && (!input.files || input.files.length === 0)) settle(null);
       }, 500);
     };
     window.addEventListener('focus', handleFocus);
 
-    // input は不可視で document.body に append
+    // input は不可視で document.body に append（Safari で .click() 必須）
     input.style.position = 'fixed';
     input.style.left = '-9999px';
     input.style.opacity = '0';
     document.body.appendChild(input);
-    console.log('[avatar] input appended; calling .click()');
     input.click();
-    console.log('[avatar] .click() returned');
   });
 }
 
