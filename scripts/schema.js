@@ -257,6 +257,22 @@ const collections = [
       { key: 'token_idx', type: 'unique', attributes: ['token'] },
     ],
   },
+
+  // ─────────── 14. comments（v17 で追加） ───────────
+  {
+    id: 'comments',
+    name: 'Comments',
+    documentSecurity: false,
+    attributes: [
+      { key: 'project_id', type: 'string',   size: 36,   required: true },
+      { key: 'user_id',    type: 'string',   size: 36,   required: true },
+      { key: 'body',       type: 'string',   size: 4000, required: true },
+    ],
+    indexes: [
+      { key: 'project_idx', type: 'key', attributes: ['project_id'] },
+      { key: 'user_idx',    type: 'key', attributes: ['user_id'] },
+    ],
+  },
 ];
 
 module.exports = { collections };

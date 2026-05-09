@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   ListChecks,
   FileText,
+  MessageSquare,
 } from 'lucide-react';
 import { C, S, ICON_SM } from '../styles/tokens';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +27,7 @@ import {
   listSchedulesByProject,
   deleteSchedule,
   deleteAllParticipantsForSchedule,
+  deleteAllCommentsForProject,
 } from '../api';
 
 import ProjectHeader from '../components/projects/ProjectHeader';
@@ -36,6 +38,7 @@ import GanttTab from '../components/projects/tabs/GanttTab';
 import KanbanTab from '../components/projects/tabs/KanbanTab';
 import TaskListTab from '../components/projects/tabs/TaskListTab';
 import FilesTab from '../components/projects/tabs/FilesTab';
+import CommentsTab from '../components/projects/tabs/CommentsTab';
 import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
 /**
@@ -51,6 +54,7 @@ const TABS = [
   { id: 'kanban',   label: 'カンバン',   Icon: LayoutGrid },
   { id: 'tasks',    label: 'タスク一覧', Icon: ListChecks },
   { id: 'files',    label: 'ファイル',   Icon: FileText },
+  { id: 'comments', label: 'コメント',   Icon: MessageSquare }, // v17 新規
 ];
 
 export default function ProjectDetailPage() {
@@ -196,6 +200,11 @@ export default function ProjectDetailPage() {
       // 配下ファイル（Storage の実体 + project_files メタ）
       await deleteAllFilesForProject(project.id);
 
+      // 配下コメント（v17）
+      try { await deleteAllCommentsForProject(project.id); } catch (e) {
+        console.warn('comments カスケード失敗:', e?.message);
+      }
+
       // 担当者（project_assignees）
       await deleteAllForProject(project.id);
 
@@ -264,12 +273,13 @@ export default function ProjectDetailPage() {
         })}
       </div>
 
-      {/* タブ本体（タスク機能はまだダミー） */}
+      {/* タブ本体 */}
       <div>
-        {activeTab === 'gantt'  && <GanttTab    project={project} />}
-        {activeTab === 'kanban' && <KanbanTab   project={project} />}
-        {activeTab === 'tasks'  && <TaskListTab project={project} />}
-        {activeTab === 'files'  && <FilesTab    project={project} />}
+        {activeTab === 'gantt'    && <GanttTab    project={project} />}
+        {activeTab === 'kanban'   && <KanbanTab   project={project} />}
+        {activeTab === 'tasks'    && <TaskListTab project={project} />}
+        {activeTab === 'files'    && <FilesTab    project={project} />}
+        {activeTab === 'comments' && <CommentsTab project={project} />}
       </div>
 
       {/* 編集モーダル */}

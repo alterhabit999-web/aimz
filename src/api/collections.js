@@ -19,4 +19,5 @@ export const COLLECTIONS = {
   PROJECT_FILES:         'project_files',
   NOTIFICATIONS:         'notifications',
   INVITATIONS:           'invitations',
+  COMMENTS:              'comments',  // v17：案件コメント
 };

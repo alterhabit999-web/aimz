@@ -8,7 +8,6 @@ import { C, S } from '../../styles/tokens';
 
 import SubtaskList from './SubtaskList';
 import ProgressModeControl from './ProgressModeControl';
-import CommentsPlaceholder from './CommentsPlaceholder';
 
 const STATUS_OPTIONS   = ['未着手', '進行中', '完了'];
 const PRIORITY_OPTIONS = ['高', '中', '低'];
@@ -366,13 +365,6 @@ export default function TaskDetailModal({
               profileById={profileById}
             />
           </FormField>
-
-          {/* コメントプレースホルダー */}
-          {isEdit && (
-            <div style={{ marginTop: S.m }}>
-              <CommentsPlaceholder />
-            </div>
-          )}
 
           {error && (
             <div style={{
