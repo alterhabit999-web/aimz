@@ -39,6 +39,15 @@ export async function listSubtasksByTask(taskId) {
   return res.documents.map(normalize);
 }
 
+/** 指定ユーザーが担当の小タスク一覧（マイタスクページ用） */
+export async function listSubtasksByAssignee(userId) {
+  const res = await databases.listDocuments(DATABASE_ID, COL, [
+    Query.equal('assignee_id', userId),
+    Query.limit(500),
+  ]);
+  return res.documents.map(normalize);
+}
+
 export async function createSubtask({
   id, task_id, name,
   is_completed = false, assignee_id = null,

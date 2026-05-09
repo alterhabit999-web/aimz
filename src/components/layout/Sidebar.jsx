@@ -11,6 +11,8 @@ import {
   BarChart2,
   ChevronRight,
   User,
+  ListChecks,
+  Calendar,
 } from 'lucide-react';
 import { C, S, ICON_SM } from '../../styles/tokens';
 import Avatar from '../ui/Avatar';
@@ -88,6 +90,8 @@ export default function Sidebar({ open, user, departments = [] }) {
         <SectionLabel style={{ marginTop: S.s }}>メニュー</SectionLabel>
         <NavItem to="/dashboard"     label="ダッシュボード" Icon={LayoutDashboard} />
         <NavItem to="/projects"      label="案件一覧"       Icon={FolderOpen} />
+        <NavItem to="/tasks"         label="タスク一覧"     Icon={ListChecks} />
+        <NavItem to="/schedule"      label="スケジュール"   Icon={Calendar} />
         <NavItem to="/teams"         label="チーム"         Icon={Users} />
 
         {user?.is_admin && (

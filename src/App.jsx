@@ -10,6 +10,8 @@ import DashboardPage from './pages/DashboardPage';
 import TeamsPage from './pages/TeamsPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
+import MyTasksPage from './pages/MyTasksPage';
+import MySchedulePage from './pages/MySchedulePage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage from './pages/ProfilePage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
@@ -22,12 +24,14 @@ import './App.css';
 /**
  * App — アプリのルート。ルーティングと AuthProvider を組み立てる。
  *
- * ルート構成（仕様 v1.3）：
+ * ルート構成（仕様 v1.9）：
  *   /login                    （未ログインのみ）
  *   /                         → /dashboard
  *   /dashboard                ダッシュボード
  *   /projects                 案件一覧
  *   /projects/:projectId      案件詳細
+ *   /tasks                    自分のタスク一覧（v17 新規）
+ *   /schedule                 自分のスケジュール（v17 新規）
  *   /teams                    チーム（チーム一覧＋メンバー一覧）
  *   /notifications            通知
  *   /profile                  マイページ
@@ -58,6 +62,8 @@ export default function App() {
             <Route path="/dashboard"             element={<DashboardPage />} />
             <Route path="/projects"              element={<ProjectsPage />} />
             <Route path="/projects/:projectId"   element={<ProjectDetailPage />} />
+            <Route path="/tasks"                 element={<MyTasksPage />} />
+            <Route path="/schedule"              element={<MySchedulePage />} />
             <Route path="/teams"                 element={<TeamsPage />} />
             <Route path="/notifications"         element={<NotificationsPage />} />
             <Route path="/profile"               element={<ProfilePage />} />
