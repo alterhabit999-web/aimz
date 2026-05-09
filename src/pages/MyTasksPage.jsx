@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckSquare, Square, FolderOpen, ListChecks } from 'lucide-react';
+import { CheckSquare, Square, FolderOpen, ListChecks, Plus } from 'lucide-react';
 import { C, S } from '../styles/tokens';
 import { useAuth } from '../contexts/AuthContext';
 import Card from '../components/ui/Card';
@@ -16,6 +16,7 @@ import {
   listProfiles,
   listAllTeamMembers,
   getTask,
+  createTask,
   updateTask,
   updateSubtask,
   deleteTask,
@@ -63,8 +64,9 @@ export default function MyTasksPage() {
 
   // モーダル状態
   const [modalOpen, setModalOpen]         = useState(false);
-  const [modalTask, setModalTask]         = useState(null);     // edit 対象（subtasks 含む）
-  const [modalProject, setModalProject]   = useState(null);
+  const [modalMode, setModalMode]         = useState('edit'); // 'create' | 'edit'
+  const [modalTask, setModalTask]         = useState(null);   // edit 対象（subtasks 含む）
+  const [modalProject, setModalProject]   = useState(null);   // 既知の場合のみ
 
   const reload = useCallback(async () => {
     if (!user?.id) return;
@@ -119,17 +121,21 @@ export default function MyTasksPage() {
     };
 
     // 案件 ID → { project, parents: [], subtasks: [] }
+    // 案件未設定タスクは projectId='__none__' のグループに集約
+    const NONE = '__none__';
     const map = new Map();
     const ensure = (projectId) => {
-      if (!map.has(projectId)) {
-        map.set(projectId, {
-          projectId,
-          project: projectById.get(projectId) || null,
+      const key = projectId || NONE;
+      if (!map.has(key)) {
+        map.set(key, {
+          projectId: key,
+          project: projectId ? (projectById.get(projectId) || null) : null,
+          isNone: !projectId,
           parents: [],
           subtasks: [],
         });
       }
-      return map.get(projectId);
+      return map.get(key);
     };
 
     for (const t of parentTasks) {
@@ -139,14 +145,15 @@ export default function MyTasksPage() {
     for (const s of mySubtasks) {
       if (!filterSubtaskByStatus(s)) continue;
       const parent = parentByTaskId.get(s.task_id);
-      const projectId = parent?.project_id || '__unknown__';
-      ensure(projectId).subtasks.push({ ...s, parentTask: parent });
+      ensure(parent?.project_id).subtasks.push({ ...s, parentTask: parent });
     }
 
-    // 並び順：案件名昇順
+    // 並び順：案件未設定は最後、その他は案件名昇順
     return [...map.values()].sort((a, b) => {
-      const an = a.project?.name || '不明な案件';
-      const bn = b.project?.name || '不明な案件';
+      if (a.isNone && !b.isNone) return 1;
+      if (!a.isNone && b.isNone) return -1;
+      const an = a.project?.name || '';
+      const bn = b.project?.name || '';
       return an.localeCompare(bn, 'ja');
     });
   }, [parentTasks, mySubtasks, parentByTaskId, projectById, statusFilter]);
@@ -158,16 +165,20 @@ export default function MyTasksPage() {
   }, [groups]);
 
   // ─── アクション ───
+  const openCreateModal = () => {
+    setModalMode('create');
+    setModalTask(null);
+    setModalProject(null); // 案件はモーダル内で選ぶ
+    setModalOpen(true);
+  };
+
   const openTaskModal = async (task) => {
-    const project = projectById.get(task.project_id);
-    if (!project) {
-      alert('案件情報が見つかりません');
-      return;
-    }
+    const project = task.project_id ? projectById.get(task.project_id) : null;
     // 既存の小タスクを取得
     const subs = await listSubtasksByTask(task.id);
+    setModalMode('edit');
     setModalTask({ ...task, subtasks: subs });
-    setModalProject(project);
+    setModalProject(project); // 案件未設定の場合は null（モーダル側で「未設定」を扱う）
     setModalOpen(true);
   };
 
@@ -197,11 +208,25 @@ export default function MyTasksPage() {
   };
 
   const handleSubmitTask = async ({ task, subtasks }) => {
-    if (!modalTask?.id) return;
-    const { id, ...patch } = task;
-    await updateTask(id, patch);
-    await setSubtasksForTask(id, subtasks);
-    if (modalProject?.id) await syncProjectStatusFromTasks(modalProject.id);
+    if (modalMode === 'edit' && modalTask?.id) {
+      const { id, ...patch } = task;
+      await updateTask(id, patch);
+      await setSubtasksForTask(id, subtasks);
+      if (task.project_id) await syncProjectStatusFromTasks(task.project_id);
+    } else {
+      // create
+      const created = await createTask({
+        ...task,
+        // 自分担当をデフォルトに（未指定なら自分）
+        assignee_id: task.assignee_id || user.id,
+        order_index: 0,
+        created_by: user.id,
+      });
+      if (subtasks?.length) {
+        await setSubtasksForTask(created.id, subtasks);
+      }
+      if (created.project_id) await syncProjectStatusFromTasks(created.project_id);
+    }
     await reload();
   };
 
@@ -209,7 +234,7 @@ export default function MyTasksPage() {
     if (!task) return;
     await deleteAllSubtasksForTask(task.id);
     await deleteTask(task.id);
-    if (modalProject?.id) await syncProjectStatusFromTasks(modalProject.id);
+    if (task.project_id) await syncProjectStatusFromTasks(task.project_id);
     await reload();
   };
 
@@ -220,22 +245,34 @@ export default function MyTasksPage() {
 
   return (
     <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-      <h1 style={{
-        fontSize: 'clamp(1.05rem, 4vw, 1.5rem)',
-        fontWeight: 700,
-        color: C.text,
-        margin: 0,
-        marginBottom: S.l,
+      <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: S.s,
+        marginBottom: S.l,
+        flexWrap: 'wrap',
       }}>
-        <ListChecks size={22} color={C.accent} />
-        タスク一覧
-        <span style={{ fontSize: '0.857rem', color: C.textSub, fontWeight: 400 }}>
-          {loading ? '' : `${totalCount} 件`}
-        </span>
-      </h1>
+        <h1 style={{
+          fontSize: 'clamp(1.05rem, 4vw, 1.5rem)',
+          fontWeight: 700,
+          color: C.text,
+          margin: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: S.s,
+        }}>
+          <ListChecks size={22} color={C.accent} />
+          タスク一覧
+          <span style={{ fontSize: '0.857rem', color: C.textSub, fontWeight: 400 }}>
+            {loading ? '' : `${totalCount} 件`}
+          </span>
+        </h1>
+        <div style={{ marginLeft: 'auto' }}>
+          <Button size="sm" Icon={Plus} onClick={openCreateModal}>
+            タスクを追加
+          </Button>
+        </div>
+      </div>
 
       {/* ステータスフィルター */}
       <div style={{ display: 'flex', gap: S.xs, marginBottom: S.m, flexWrap: 'wrap' }}>
@@ -284,6 +321,7 @@ export default function MyTasksPage() {
               onSubtaskClick={openParentModalForSubtask}
               onSubtaskToggle={handleToggleSubtask}
               onProjectOpen={g.project ? () => navigate(`/projects/${g.project.id}`) : null}
+              isNone={g.isNone}
             />
           ))}
         </div>
@@ -291,8 +329,9 @@ export default function MyTasksPage() {
 
       <TaskDetailModal
         open={modalOpen}
-        mode="edit"
+        mode={modalMode}
         project={modalProject}
+        projects={projects}
         initial={modalTask}
         teamMembers={teamMembers}
         profiles={profiles}
@@ -308,7 +347,7 @@ export default function MyTasksPage() {
 // ============================================================
 // 案件グループ
 // ============================================================
-function ProjectGroup({ group, onTaskClick, onSubtaskClick, onSubtaskToggle, onProjectOpen }) {
+function ProjectGroup({ group, onTaskClick, onSubtaskClick, onSubtaskToggle, onProjectOpen, isNone }) {
   return (
     <Card>
       {/* グループヘッダー */}
@@ -320,16 +359,14 @@ function ProjectGroup({ group, onTaskClick, onSubtaskClick, onSubtaskToggle, onP
         paddingBottom: S.s,
         borderBottom: `1px solid ${C.border}`,
       }}>
-        <FolderOpen size={16} color={C.accent} />
+        <FolderOpen size={16} color={isNone ? C.textMuted : C.accent} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '1rem', fontWeight: 700, color: C.text }}>
-            {group.project?.name || '不明な案件'}
+            {isNone ? '案件未設定' : (group.project?.name || '不明な案件')}
           </div>
-          {group.project && (
-            <div style={{ fontSize: '0.75rem', color: C.textMuted }}>
-              {group.parents.length} 件のタスク / {group.subtasks.length} 件の小タスク
-            </div>
-          )}
+          <div style={{ fontSize: '0.75rem', color: C.textMuted }}>
+            {group.parents.length} 件のタスク / {group.subtasks.length} 件の小タスク
+          </div>
         </div>
         {onProjectOpen && (
           <Button size="sm" variant="secondary" onClick={onProjectOpen}>

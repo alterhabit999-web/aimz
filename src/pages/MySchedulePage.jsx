@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, ChevronLeft, ChevronRight, MapPin, FolderOpen, CheckSquare } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, MapPin, FolderOpen, CheckSquare, Plus } from 'lucide-react';
 import { C, S } from '../styles/tokens';
 import { useAuth } from '../contexts/AuthContext';
 import Card from '../components/ui/Card';
@@ -8,11 +8,17 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Badge, { statusVariant, priorityVariant } from '../components/ui/Badge';
 import { formatTime } from '../utils/format';
+import TaskDetailModal from '../components/tasks/TaskDetailModal';
 import {
   listSchedules,
   listSchedulesByUser,
   listTasksByAssignee,
   listProjects,
+  listProfiles,
+  listAllTeamMembers,
+  createTask,
+  setSubtasksForTask,
+  syncProjectStatusFromTasks,
 } from '../api';
 import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
@@ -75,11 +81,17 @@ export default function MySchedulePage() {
   const [allSchedules, setAllSchedules] = useState([]); // 自分が参加 or 自分が作成
   const [tasks, setTasks]               = useState([]);
   const [projects, setProjects]         = useState([]);
+  const [profiles, setProfiles]         = useState([]);
+  const [teamMembers, setTeamMembers]   = useState([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
 
   // クリックされた日（モーダル）
   const [selectedDate, setSelectedDate] = useState(null);
+
+  // タスク作成モーダル
+  const [taskModalOpen, setTaskModalOpen]     = useState(false);
+  const [taskModalDefault, setTaskModalDefault] = useState(null); // { due_date } で初期値を渡す
 
   const reload = useCallback(async () => {
     if (!user?.id) return;
@@ -90,10 +102,12 @@ export default function MySchedulePage() {
       const myParticipations = await listSchedulesByUser(user.id);
       const myScheduleIds = new Set(myParticipations.map(p => p.schedule_id));
 
-      const [allSched, myTasks, pj] = await Promise.all([
+      const [allSched, myTasks, pj, pr, tm] = await Promise.all([
         listSchedules({ limit: 500 }),
         listTasksByAssignee(user.id),
         listProjects({ limit: 200 }),
+        listProfiles({ limit: 200 }),
+        listAllTeamMembers(),
       ]);
 
       // 自分が参加 or 作成のスケジュールに絞る
@@ -104,6 +118,8 @@ export default function MySchedulePage() {
       setAllSchedules(mySchedules);
       setTasks(myTasks);
       setProjects(pj);
+      setProfiles(pr);
+      setTeamMembers(tm);
     } catch (err) {
       console.error(err);
       setError(err?.message || 'スケジュールの取得に失敗しました');
@@ -155,6 +171,31 @@ export default function MySchedulePage() {
     setCursor({ year: t.getFullYear(), month: t.getMonth() });
   };
 
+  // タスク作成
+  const openCreateTaskFromDay = (date) => {
+    // 期限としてその日を初期値に
+    setTaskModalDefault({ due_date: ymd(date) });
+    setSelectedDate(null);  // 日詳細モーダルは閉じる
+    setTaskModalOpen(true);
+  };
+  const openCreateTaskGeneric = () => {
+    setTaskModalDefault(null);
+    setTaskModalOpen(true);
+  };
+  const handleSubmitTask = async ({ task, subtasks }) => {
+    const created = await createTask({
+      ...task,
+      assignee_id: task.assignee_id || user.id,
+      order_index: 0,
+      created_by: user.id,
+    });
+    if (subtasks?.length) {
+      await setSubtasksForTask(created.id, subtasks);
+    }
+    if (created.project_id) await syncProjectStatusFromTasks(created.project_id);
+    await reload();
+  };
+
   if (!user) return null;
 
   const monthLabel = `${cursor.year}年 ${cursor.month + 1}月`;
@@ -162,19 +203,31 @@ export default function MySchedulePage() {
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-      <h1 style={{
-        fontSize: 'clamp(1.05rem, 4vw, 1.5rem)',
-        fontWeight: 700,
-        color: C.text,
-        margin: 0,
-        marginBottom: S.l,
+      <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: S.s,
+        marginBottom: S.l,
+        flexWrap: 'wrap',
       }}>
-        <Calendar size={22} color={C.accent} />
-        スケジュール
-      </h1>
+        <h1 style={{
+          fontSize: 'clamp(1.05rem, 4vw, 1.5rem)',
+          fontWeight: 700,
+          color: C.text,
+          margin: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: S.s,
+        }}>
+          <Calendar size={22} color={C.accent} />
+          スケジュール
+        </h1>
+        <div style={{ marginLeft: 'auto' }}>
+          <Button size="sm" Icon={Plus} onClick={openCreateTaskGeneric}>
+            タスクを追加
+          </Button>
+        </div>
+      </div>
 
       {/* 月ナビゲーション */}
       <div style={{
@@ -268,6 +321,14 @@ export default function MySchedulePage() {
         title={selectedDate ? `${selectedDate.getFullYear()}年 ${selectedDate.getMonth() + 1}月 ${selectedDate.getDate()}日 の予定・タスク` : ''}
         onClose={() => setSelectedDate(null)}
         width="600px"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <Button size="sm" Icon={Plus} variant="secondary" onClick={() => selectedDate && openCreateTaskFromDay(selectedDate)}>
+              この日にタスクを追加
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setSelectedDate(null)}>閉じる</Button>
+          </div>
+        }
       >
         {selectedEvents && (
           <DayDetail
@@ -277,6 +338,19 @@ export default function MySchedulePage() {
           />
         )}
       </Modal>
+
+      {/* タスク作成モーダル */}
+      <TaskDetailModal
+        open={taskModalOpen}
+        mode="create"
+        projects={projects}
+        teamMembers={teamMembers}
+        profiles={profiles}
+        editable={true}
+        initial={taskModalDefault}  // { due_date } を渡してその日付で初期化
+        onClose={() => setTaskModalOpen(false)}
+        onSubmit={handleSubmitTask}
+      />
     </div>
   );
 }

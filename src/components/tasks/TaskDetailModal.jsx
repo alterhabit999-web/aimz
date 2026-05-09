@@ -25,8 +25,11 @@ const calcSubtaskProgress = (list) => {
  *
  * Props:
  *   open, mode: 'create' | 'edit'
- *   project: { id, team_id, ... }     必須（チームメンバー選択肢取得用）
- *   initial: 既存タスク（edit 時）   省略時は新規作成
+ *   project:  { id, team_id, ... }   呼び出し側で案件を固定したい場合（案件詳細から開く時）
+ *                                     省略可（v17：案件未設定タスク or 案件選択モード）
+ *   projects: 選択肢に出す案件リスト  v17 新規。project が未指定のとき表示するピッカー用。
+ *                                     渡さなければピッカーは出ない（既存呼び出しと互換）
+ *   initial:  既存タスク（edit 時）   省略時は新規作成
  *     edit 時は呼び出し側で listSubtasksByTask の結果を `subtasks` プロパティに含めて渡す
  *   defaultStatus: 'create' 時の初期ステータス（カンバンの「+」から起動時に使う）
  *   teamMembers, profiles: 担当者選択肢の構築用（props 駆動）
@@ -40,6 +43,7 @@ export default function TaskDetailModal({
   open,
   mode = 'create',
   project,
+  projects = [],
   initial,
   defaultStatus,
   teamMembers = [],
@@ -56,6 +60,7 @@ export default function TaskDetailModal({
   const [description, setDescription] = useState('');
   const [status, setStatus]         = useState('未着手');
   const [priority, setPriority]     = useState('中');
+  const [projectId, setProjectId]   = useState('');   // v17：案件選択
   const [assigneeId, setAssigneeId] = useState('');
   const [startDate, setStartDate]   = useState('');
   const [dueDate, setDueDate]       = useState('');
@@ -69,18 +74,36 @@ export default function TaskDetailModal({
   const [submitting, setSubmitting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  // 担当者選択肢：当該案件のチームメンバー
+  // 親が案件を固定しているかどうか
+  const projectIsFixed = !!project?.id;
+  const showProjectPicker = !projectIsFixed && projects.length > 0;
+
+  // 現在対象としている案件オブジェクト
+  const currentProject = useMemo(() => {
+    if (projectIsFixed) return project;
+    if (!projectId) return null;
+    return projects.find(p => p.id === projectId) || null;
+  }, [projectIsFixed, project, projectId, projects]);
+
+  // 担当者選択肢：
+  //   案件が決まっていれば そのチームのメンバー
+  //   未指定（案件なし）なら 全 profiles を許可（個人タスク・横断タスク向け）
   const profileById = useMemo(() => new Map(profiles.map(p => [p.id, p])), [profiles]);
   const memberOptions = useMemo(() => {
-    if (!project?.team_id) return [];
+    if (!currentProject?.team_id) {
+      // 案件なし：全 profiles から選べるようにする
+      return profiles
+        .filter(p => p.is_active !== false)
+        .map(p => ({ ...p, role: 'member' }));
+    }
     return teamMembers
-      .filter(m => m.team_id === project.team_id)
+      .filter(m => m.team_id === currentProject.team_id)
       .map(m => {
         const p = profileById.get(m.user_id);
         return p ? { ...p, role: m.role } : null;
       })
       .filter(Boolean);
-  }, [project?.team_id, teamMembers, profileById]);
+  }, [currentProject?.team_id, teamMembers, profileById, profiles]);
 
   // open / initial 変化に追随してフォームを初期化
   useEffect(() => {
@@ -90,6 +113,7 @@ export default function TaskDetailModal({
       setDescription(initial.description || '');
       setStatus(initial.status || '未着手');
       setPriority(initial.priority || '中');
+      setProjectId(initial.project_id || '');
       setAssigneeId(initial.assignee_id || '');
       setStartDate(initial.start_date || '');
       setDueDate(initial.due_date || '');
@@ -97,16 +121,18 @@ export default function TaskDetailModal({
       setManualProgress(initial.progress_rate ?? 0);
       setSubtasks(initial.subtasks || []);
     } else {
-      setName('');
-      setDescription('');
-      setStatus(defaultStatus || '未着手');
-      setPriority('中');
-      setAssigneeId('');
-      setStartDate('');
-      setDueDate('');
-      setProgressMode('manual');
-      setManualProgress(0);
-      setSubtasks([]);
+      // create 時：initial が部分的に渡されていたら（例：スケジュールから日付を既定で開く）defaults として採用
+      setName(initial?.name || '');
+      setDescription(initial?.description || '');
+      setStatus(initial?.status || defaultStatus || '未着手');
+      setPriority(initial?.priority || '中');
+      setProjectId(initial?.project_id || '');
+      setAssigneeId(initial?.assignee_id || '');
+      setStartDate(initial?.start_date || '');
+      setDueDate(initial?.due_date || '');
+      setProgressMode(initial?.progress_mode || 'manual');
+      setManualProgress(initial?.progress_rate ?? 0);
+      setSubtasks(initial?.subtasks || []);
     }
     setError('');
     setSubmitting(false);
@@ -127,10 +153,12 @@ export default function TaskDetailModal({
 
     setSubmitting(true);
     try {
+      // 案件 ID は親が固定していればそれ、無ければピッカーの値（空なら null）
+      const finalProjectId = projectIsFixed ? project.id : (projectId || null);
       await onSubmit?.({
         task: {
           ...(isEdit ? { id: initial.id } : {}),
-          project_id: project?.id,
+          project_id: finalProjectId,
           name: name.trim(),
           description: description.trim(),
           status,
@@ -212,6 +240,26 @@ export default function TaskDetailModal({
             />
           </FormField>
 
+          {/* 案件（v17 新規：親が project を固定していない時のみ表示） */}
+          {showProjectPicker && (
+            <FormField label="案件" hint="案件を選ばないと「案件未設定」のタスクとして登録されます">
+              <select
+                value={projectId}
+                onChange={e => {
+                  setProjectId(e.target.value);
+                  setAssigneeId(''); // 案件変更時に担当者をリセット（チームが変わるため）
+                }}
+                style={selectStyle}
+                disabled={!editable}
+              >
+                <option value="">— 案件未設定 —</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </FormField>
+          )}
+
           {/* 説明 */}
           <FormField label="説明">
             <textarea
@@ -249,7 +297,14 @@ export default function TaskDetailModal({
           </div>
 
           {/* 担当者 */}
-          <FormField label="担当者" hint={memberOptions.length === 0 ? 'チームにメンバーがいません' : 'チームメンバーから選択'}>
+          <FormField
+            label="担当者"
+            hint={
+              memberOptions.length === 0
+                ? (currentProject ? 'チームにメンバーがいません' : 'メンバーが登録されていません')
+                : (currentProject ? 'チームメンバーから選択' : '全メンバーから選択（案件未設定）')
+            }
+          >
             <select
               value={assigneeId}
               onChange={e => setAssigneeId(e.target.value)}

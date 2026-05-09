@@ -31,7 +31,8 @@
     "seed:auth-users": "node scripts/seed-auth-users.js",
     "sync:profile-emails": "node scripts/sync-profile-emails.js",
     "fix:invitations-permissions": "node scripts/fix-invitations-permissions.js",
-    "cleanup:orphans": "node scripts/cleanup-orphans.js"
+    "cleanup:orphans": "node scripts/cleanup-orphans.js",
+    "migrate:task-project-optional": "node scripts/update-task-project-optional.js"
   },
   "eslintConfig": {
     "extends": [

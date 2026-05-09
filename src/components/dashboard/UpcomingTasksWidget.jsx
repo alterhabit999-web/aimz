@@ -47,7 +47,7 @@ function TaskRow({ task }) {
   return (
     <li>
       <Link
-        to={`/projects/${task.project_id}`}
+        to={task.project_id ? `/projects/${task.project_id}` : `/tasks`}
         style={{
           display: 'flex',
           alignItems: 'center',

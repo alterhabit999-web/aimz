@@ -124,7 +124,7 @@ const collections = [
     name: 'Tasks',
     documentSecurity: false,
     attributes: [
-      { key: 'project_id',    type: 'string',   size: 36,   required: true },
+      { key: 'project_id',    type: 'string',   size: 36,   required: false }, // v17：案件未設定タスクを許容するため required=false に変更
       { key: 'name',          type: 'string',   size: 200,  required: true },
       { key: 'description',   type: 'string',   size: 2000, required: false },
       { key: 'status',        type: 'enum',     elements: ['未着手', '進行中', '完了'], required: false, default: '未着手' },
