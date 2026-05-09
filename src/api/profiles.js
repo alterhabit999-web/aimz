@@ -4,7 +4,7 @@
  * profiles のドキュメント ID は Appwrite Auth の userId と同一にする運用。
  * （= ログイン直後の user.$id でそのまま getDocument できる）
  *
- * UI 側は dummy.js 由来の `id` プロパティを参照するコードが多いので、
+ * UI 側は `id` プロパティを参照するコードが多いので、
  * 戻り値は `{ ...doc, id: doc.$id }` に正規化してから返す。
  */
 

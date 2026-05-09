@@ -32,7 +32,7 @@ async function findMembership(teamId, userId) {
   return res.documents[0] || null;
 }
 
-/** 全 team_members（dummy.js の DUMMY_TEAM_MEMBERS と同等） */
+/** 全 team_members を取得（メンバーシップ全体を派生させるダッシュボード等で使う） */
 export async function listAllTeamMembers({ limit = 500 } = {}) {
   const res = await databases.listDocuments(DATABASE_ID, COL, [
     Query.limit(limit),

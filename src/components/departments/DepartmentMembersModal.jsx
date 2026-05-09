@@ -127,7 +127,9 @@ export default function DepartmentMembersModal({ open, department, onClose, onCh
     try {
       // この部署のすべてのチームから当該ユーザーを外す
       for (const t of view.deptTeams) {
-        try { await removeMember(t.id, removeTarget.id); } catch (_) {}
+        try { await removeMember(t.id, removeTarget.id); } catch (err) {
+          console.warn('[dept-members] removeMember failed:', t.id, removeTarget.id, err?.message);
+        }
       }
       setRemoveTarget(null);
       await reload();

@@ -84,7 +84,9 @@ export async function deleteSubtask(id) {
 export async function deleteAllSubtasksForTask(taskId) {
   const list = await listSubtasksByTask(taskId);
   for (const s of list) {
-    try { await deleteSubtask(s.id); } catch (_) {}
+    try { await deleteSubtask(s.id); } catch (err) {
+      console.warn('[subtasks] cascade delete failed:', s.id, err?.message);
+    }
   }
 }
 
@@ -110,7 +112,9 @@ export async function setSubtasksForTask(taskId, subtasks) {
   // 1) 削除：既存にあるが入力に無いもの
   for (const s of existing) {
     if (!keptIds.has(s.id)) {
-      try { await deleteSubtask(s.id); } catch (_) {}
+      try { await deleteSubtask(s.id); } catch (err) {
+        console.warn('[subtasks] sync delete failed:', s.id, err?.message);
+      }
     }
   }
 

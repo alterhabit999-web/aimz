@@ -1,11 +1,14 @@
 /**
  * seed-data.js — Appwrite に投入するシードデータ定義
  *
- * `src/data/dummy.js` の同名定数と同じ ID 体系で揃えており、
- * 段階的に実 DB へ切り替えていく際にダミーと実 DB が混在しても
- * 矛盾が出ないようにしている。
- *
+ * 開発用の固定データ（u1〜u5、サンプル部署・チーム・案件・タスク等）。
  * Node.js から require するため CommonJS で書く。
+ *
+ * 注意：
+ *   - 中間テーブル（team_members 等）の docId は v18 から ID.unique() を使う運用。
+ *     ただし seed.js は短い合成 docId（"tm_team-eng_u1" など）で投入しても、
+ *     API 層は (team_id, user_id) クエリでドキュメントを発見するため互換動作する。
+ *   - シード再投入で u1 の Auth ユーザーを上書きしないよう注意。
  */
 
 // ─────────── profiles ───────────

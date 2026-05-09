@@ -58,6 +58,8 @@ export async function deleteComment(id) {
 export async function deleteAllCommentsForProject(projectId) {
   const list = await listCommentsByProject(projectId, { limit: 500 });
   for (const c of list) {
-    try { await deleteComment(c.id); } catch (_) {}
+    try { await deleteComment(c.id); } catch (err) {
+      console.warn('[comments] cascade delete failed:', c.id, err?.message);
+    }
   }
 }

@@ -1,12 +1,13 @@
 /**
  * api/schedule-participants.js — schedule_participants 中間テーブル
  *
- * 設計：
- *   - documentId は `${schedule_id}__${user_id}` 形式（"_" 衝突回避で "__"）
- *   - team-members / project-assignees と同じパターン
+ * 設計（v18 で team_members / project_assignees と同様の方針に統一）：
+ *   - documentId は ID.unique() で発行（Appwrite docId は 36 字制限）
+ *   - 一意性は (schedule_id, user_id) のクエリで担保
+ *   - 旧形式の合成 docId を持つ既存ドキュメントもクエリで発見できるためそのまま動作
  */
 
-import { Query } from 'appwrite';
+import { ID, Query } from 'appwrite';
 import { databases, DATABASE_ID } from '../appwrite';
 import { COLLECTIONS } from './collections';
 
@@ -14,7 +15,14 @@ const COL = COLLECTIONS.SCHEDULE_PARTICIPANTS;
 
 const normalize = (doc) => doc ? { ...doc, id: doc.$id } : null;
 
-const docIdOf = (scheduleId, userId) => `${scheduleId}__${userId}`;
+async function findParticipant(scheduleId, userId) {
+  const res = await databases.listDocuments(DATABASE_ID, COL, [
+    Query.equal('schedule_id', scheduleId),
+    Query.equal('user_id', userId),
+    Query.limit(1),
+  ]);
+  return res.documents[0] || null;
+}
 
 export async function listAllScheduleParticipants({ limit = 1000 } = {}) {
   const res = await databases.listDocuments(DATABASE_ID, COL, [
@@ -40,22 +48,19 @@ export async function listSchedulesByUser(userId) {
 }
 
 export async function addParticipant(scheduleId, userId) {
-  const id = docIdOf(scheduleId, userId);
-  try {
-    const doc = await databases.createDocument(DATABASE_ID, COL, id, {
-      schedule_id: scheduleId, user_id: userId,
-    });
-    return normalize(doc);
-  } catch (err) {
-    if (err?.code === 409) return null;
-    throw err;
-  }
+  const existing = await findParticipant(scheduleId, userId);
+  if (existing) return normalize(existing);
+  const doc = await databases.createDocument(DATABASE_ID, COL, ID.unique(), {
+    schedule_id: scheduleId, user_id: userId,
+  });
+  return normalize(doc);
 }
 
 export async function removeParticipant(scheduleId, userId) {
-  const id = docIdOf(scheduleId, userId);
+  const existing = await findParticipant(scheduleId, userId);
+  if (!existing) return null;
   try {
-    return await databases.deleteDocument(DATABASE_ID, COL, id);
+    return await databases.deleteDocument(DATABASE_ID, COL, existing.$id);
   } catch (err) {
     if (err?.code === 404) return null;
     throw err;
