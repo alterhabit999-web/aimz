@@ -210,13 +210,41 @@ function ProfileEditor({ profile, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
-  // 診断用：画面上に表示するイベントログ
-  const [diagLog, setDiagLog] = useState([]);
+  // 診断用：sessionStorage に保存するので unmount/remount しても残る
+  const DIAG_KEY = '__avatar_diag__';
+  const readDiag = () => {
+    try {
+      const s = sessionStorage.getItem(DIAG_KEY);
+      return s ? JSON.parse(s) : [];
+    } catch { return []; }
+  };
+  const [diagLog, setDiagLog] = useState(readDiag);
   const pushDiag = (msg) => {
     const line = `${new Date().toLocaleTimeString()} ${msg}`;
     console.log('[avatar]', line);
-    setDiagLog(prev => [...prev, line].slice(-30));
+    setDiagLog(prev => {
+      const next = [...prev, line].slice(-50);
+      try { sessionStorage.setItem(DIAG_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
+  const clearDiag = () => {
+    setDiagLog([]);
+    try { sessionStorage.removeItem(DIAG_KEY); } catch {}
+  };
+
+  // ProfileEditor の mount / unmount を可視化
+  useEffect(() => {
+    pushDiag('🔵 ProfileEditor MOUNT');
+    return () => {
+      // unmount 時：sessionStorage に書く（react state は破棄される）
+      const prev = readDiag();
+      const line = `${new Date().toLocaleTimeString()} 🔴 ProfileEditor UNMOUNT`;
+      console.log('[avatar]', line);
+      try { sessionStorage.setItem(DIAG_KEY, JSON.stringify([...prev, line].slice(-50))); } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 親の profile が変わったら追随（reload 後）
   useEffect(() => {
@@ -460,7 +488,7 @@ function ProfileEditor({ profile, onSaved }) {
         </div>
         <button
           type="button"
-          onClick={() => setDiagLog([])}
+          onClick={clearDiag}
           style={{ marginTop: '4px', fontSize: '0.7rem', padding: '2px 8px' }}
         >
           ログをクリア
