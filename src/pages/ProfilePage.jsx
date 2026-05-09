@@ -337,11 +337,30 @@ function ProfileEditor({ profile, onSaved }) {
 
       <FormField label="プロフィール画像" hint="PNG / JPG（最大 5 MB）。クリック または ドラッグ&ドロップ">
         {/*
-          <label> で input を包むことで、クリックは label → input にネイティブ伝搬する。
-          以前は <div onClick={() => input.click()}> + 内側に input という構成で、
-          プログラマティック click が親にバブルして二重発火し、選択結果が破棄される
-          ブラウザがあったため、<label> 方式に変更（v15.1）。
+          input は label の外（兄弟）に置き htmlFor で接続。
+          内側にネストすると、プログラマティック click が親に再バブル / display:none で
+          file picker が起動しないブラウザがあるため、視覚的に隠す sr-only パターンを採用。
         */}
+        <input
+          id="avatar-file-input"
+          ref={fileInputRef}
+          type="file"
+          accept={AVATAR_ACCEPT.join(',')}
+          onChange={onFileChange}
+          // 同じファイルを再選択しても onChange が発火するよう、開く直前に value をクリア
+          onClick={(e) => { e.currentTarget.value = ''; }}
+          style={{
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            padding: 0,
+            margin: -1,
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        />
         <label
           htmlFor="avatar-file-input"
           onDrop={onDrop}
@@ -380,16 +399,6 @@ function ProfileEditor({ profile, onSaved }) {
                     : (savedUrl ? '現在の画像が設定されています' : '画像は未設定'))}
             </div>
           </div>
-          <input
-            id="avatar-file-input"
-            ref={fileInputRef}
-            type="file"
-            accept={AVATAR_ACCEPT.join(',')}
-            onChange={onFileChange}
-            // 同じファイルを再選択しても onChange が発火するよう、開く直前に value をクリア
-            onClick={(e) => { e.currentTarget.value = ''; }}
-            style={{ display: 'none' }}
-          />
         </label>
 
         {/* アクションボタン */}
