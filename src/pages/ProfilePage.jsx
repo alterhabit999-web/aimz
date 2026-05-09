@@ -250,7 +250,11 @@ function ProfileEditor({ profile, onSaved }) {
   };
 
   const onFileChange = (e) => {
-    handlePickFile(e.target.files?.[0] || null);
+    const file = e.target.files?.[0] || null;
+    handlePickFile(file);
+    // 同じファイルを再選択しても onChange が発火するよう、処理後に value をクリア
+    // （onClick 内で value='' すると一部ブラウザで onChange 抑制されるため、ここで実施）
+    if (e.target) e.target.value = '';
   };
 
   const onDrop = (e) => {
@@ -347,19 +351,7 @@ function ProfileEditor({ profile, onSaved }) {
           type="file"
           accept={AVATAR_ACCEPT.join(',')}
           onChange={onFileChange}
-          // 同じファイルを再選択しても onChange が発火するよう、開く直前に value をクリア
-          onClick={(e) => { e.currentTarget.value = ''; }}
-          style={{
-            position: 'absolute',
-            width: 1,
-            height: 1,
-            padding: 0,
-            margin: -1,
-            overflow: 'hidden',
-            clip: 'rect(0, 0, 0, 0)',
-            whiteSpace: 'nowrap',
-            border: 0,
-          }}
+          style={{ display: 'none' }}
         />
         <label
           htmlFor="avatar-file-input"
