@@ -229,9 +229,14 @@ function ProfileEditor({ profile, onSaved }) {
 
   // ─── ファイル選択 / ドロップ ───
   const handlePickFile = (file) => {
+    console.log('[avatar] handlePickFile', { file, name: file?.name, size: file?.size, type: file?.type });
     setError('');
-    if (!file) return;
+    if (!file) {
+      console.log('[avatar] file is null, returning');
+      return;
+    }
     if (file.size > AVATAR_MAX_BYTES) {
+      console.log('[avatar] size too large');
       setError(`ファイルサイズは ${(AVATAR_MAX_BYTES / 1_000_000).toFixed(0)} MB 以下にしてください`);
       return;
     }
@@ -239,27 +244,29 @@ function ProfileEditor({ profile, onSaved }) {
     const ext = (file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] || '').toLowerCase();
     const okByExt = ['png', 'jpg', 'jpeg'].includes(ext);
     const okByType = !file.type || AVATAR_ACCEPT.includes(file.type);
+    console.log('[avatar] validation', { ext, okByExt, okByType });
     if (!okByExt || !okByType) {
       setError('PNG / JPG / JPEG のみアップロードできます');
       return;
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+    const blob = URL.createObjectURL(file);
+    console.log('[avatar] state set', { blob });
     setPendingFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    setPreviewUrl(blob);
     setRemoveAvatar(false);
   };
 
   const onFileChange = (e) => {
     const file = e.target.files?.[0] || null;
+    console.log('[avatar] onFileChange fired', { file, filesLength: e.target.files?.length });
     handlePickFile(file);
-    // 同じファイルを再選択しても onChange が発火するよう、処理後に value をクリア
-    // （onClick 内で value='' すると一部ブラウザで onChange 抑制されるため、ここで実施）
-    if (e.target) e.target.value = '';
   };
 
   const onDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log('[avatar] onDrop fired', { files: e.dataTransfer?.files });
     handlePickFile(e.dataTransfer?.files?.[0] || null);
   };
 
