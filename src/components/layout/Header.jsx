@@ -85,7 +85,24 @@ export default function Header({ onToggleSidebar, user, unreadCount = 0 }) {
         )}
       </NavLink>
 
-      <Avatar name={user?.full_name} src={user?.avatar_url} size={28} />
+      {/* アバター（クリックで /profile） */}
+      <NavLink
+        to="/profile"
+        title="マイページを開く"
+        style={({ isActive }) => ({
+          display: 'flex',
+          alignItems: 'center',
+          padding: '4px',
+          borderRadius: '50%',
+          background: isActive ? C.accentLight : 'transparent',
+          textDecoration: 'none',
+          transition: 'background 0.15s',
+        })}
+        onMouseEnter={e => { e.currentTarget.style.background = C.bgSub; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+      >
+        <Avatar name={user?.full_name} src={user?.avatar_url} size={28} />
+      </NavLink>
     </header>
   );
 }

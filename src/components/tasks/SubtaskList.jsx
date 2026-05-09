@@ -53,6 +53,10 @@ export default function SubtaskList({ subtasks = [], onChange, readOnly = false,
   };
 
   const handleAddKey = (e) => {
+    // IME 変換中（文字変換確定の Enter）は追加しない
+    // - e.nativeEvent.isComposing：標準的な判定
+    // - keyCode === 229：レガシーブラウザ向けフォールバック
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       addSubtask();
@@ -189,6 +193,8 @@ function SubtaskRow({ subtask, onToggle, onRemove, onRename, readOnly, profileBy
           onChange={e => setName(e.target.value)}
           onBlur={finishEdit}
           onKeyDown={e => {
+            // IME 変換中の Enter は無視
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return;
             if (e.key === 'Enter') { e.preventDefault(); finishEdit(); }
             if (e.key === 'Escape') { setName(subtask.name); setEditing(false); }
           }}

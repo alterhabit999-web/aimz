@@ -309,6 +309,8 @@ function CommentComposer({ body, onChange, onSubmit, submitting, currentUser }) 
             disabled={submitting}
             style={textareaStyle}
             onKeyDown={(e) => {
+              // IME 変換中の Enter は無視
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
                 onSubmit(e);

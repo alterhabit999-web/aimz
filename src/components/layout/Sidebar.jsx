@@ -107,14 +107,24 @@ export default function Sidebar({ open, user, departments = [] }) {
         <NavItem to="/profile" label="マイページ" Icon={User} />
       </nav>
 
-      {/* ユーザー情報 */}
-      <div style={{
-        padding: S.m,
-        borderTop: `1px solid ${C.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: S.s,
-      }}>
+      {/* ユーザー情報（クリックで /profile） */}
+      <NavLink
+        to="/profile"
+        title="マイページを開く"
+        style={({ isActive }) => ({
+          padding: S.m,
+          borderTop: `1px solid ${C.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: S.s,
+          textDecoration: 'none',
+          color: 'inherit',
+          background: isActive ? C.accentLight : 'transparent',
+          transition: 'background 0.15s',
+        })}
+        onMouseEnter={e => { e.currentTarget.style.background = C.bgSub; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+      >
         <Avatar name={user?.full_name} src={user?.avatar_url} size={32} />
         <div style={{ overflow: 'hidden', flex: 1 }}>
           <div style={{
@@ -132,7 +142,7 @@ export default function Sidebar({ open, user, departments = [] }) {
           )}
         </div>
         <ChevronRight size={14} color={C.textMuted} />
-      </div>
+      </NavLink>
     </aside>
   );
 }
