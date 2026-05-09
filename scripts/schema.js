@@ -21,7 +21,7 @@ const collections = [
     attributes: [
       { key: 'full_name',  type: 'string',   size: 100, required: true },
       { key: 'email',      type: 'email',                required: false },
-      { key: 'avatar_url', type: 'string',   size: 500, required: false },
+      { key: 'avatar_url', type: 'string',   size: 200000, required: false }, // v18：base64 data URI を保存するため拡張
       { key: 'is_admin',   type: 'boolean',              required: false, default: false },
       { key: 'is_active',  type: 'boolean',              required: false, default: true },
     ],

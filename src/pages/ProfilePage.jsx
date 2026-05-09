@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { User, Lock, LogOut, Crown, Shield, Upload, Trash2 } from 'lucide-react';
 import { C, S } from '../styles/tokens';
 import Card from '../components/ui/Card';
@@ -14,12 +14,13 @@ import {
   listAllTeamMembers,
   listTeams,
   listDepartments,
-  uploadAvatar,
-  deleteAvatarByUrl,
-  isStorageAvatar,
-  AVATAR_MAX_BYTES,
-  AVATAR_ACCEPT,
 } from '../api';
+import {
+  pickImageFile,
+  processImageToDataUri,
+  validateImageFile,
+  AVATAR_MAX_FILE_BYTES,
+} from '../utils/avatarImage';
 import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
 /**
@@ -187,20 +188,18 @@ export default function ProfilePage() {
 }
 
 // ============================================================
-// プロフィール編集
+// プロフィール編集（v18：base64 data URI + 動的 input picker 方式）
 // ============================================================
 function ProfileEditor({ profile, onSaved }) {
-  const fileInputRef = useRef(null);
-
   const [name, setName]                 = useState(profile.full_name || '');
-  // 永続化済みのアバター URL（DB 値）
-  const [savedUrl, setSavedUrl]         = useState(profile.avatar_url || '');
-  // 選択中の File（未アップロード）
-  const [pendingFile, setPendingFile]   = useState(null);
-  // ローカルプレビュー用 ObjectURL
-  const [previewUrl, setPreviewUrl]     = useState(null);
-  // 「削除」フラグ：保存時に DB を null にする
+  // 永続化済みのアバター（URL でも data URI でも可）
+  const [savedSrc, setSavedSrc]         = useState(profile.avatar_url || '');
+  // 未保存の data URI（プレビュー兼保存対象）
+  const [pendingDataUri, setPendingDataUri] = useState(null);
+  // 削除フラグ：保存時に DB を null にする
   const [removeAvatar, setRemoveAvatar] = useState(false);
+  // ファイル選択直後のリサイズ中
+  const [processing, setProcessing]     = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
@@ -208,67 +207,68 @@ function ProfileEditor({ profile, onSaved }) {
   // 親の profile が変わったら追随（reload 後）
   useEffect(() => {
     setName(profile.full_name || '');
-    setSavedUrl(profile.avatar_url || '');
-    setPendingFile(null);
-    setPreviewUrl(null);
+    setSavedSrc(profile.avatar_url || '');
+    setPendingDataUri(null);
     setRemoveAvatar(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }, [profile.id, profile.full_name, profile.avatar_url]);
-
-  // ObjectURL のクリーンアップ
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
 
   const dirty =
     name !== (profile.full_name || '') ||
-    !!pendingFile ||
+    !!pendingDataUri ||
     removeAvatar;
 
-  // ─── ファイル選択 / ドロップ ───
-  const handlePickFile = (file) => {
+  // 共通：File を受けてリサイズ→data URI 化→state にセット
+  const ingestFile = async (file) => {
     setError('');
     if (!file) return;
-    if (file.size > AVATAR_MAX_BYTES) {
-      setError(`ファイルサイズは ${(AVATAR_MAX_BYTES / 1_000_000).toFixed(0)} MB 以下にしてください`);
+    const v = validateImageFile(file);
+    if (!v.ok) {
+      setError(v.error);
       return;
     }
-    if (!AVATAR_ACCEPT.includes(file.type)) {
-      setError('PNG / JPG / JPEG のみアップロードできます');
-      return;
+    setProcessing(true);
+    try {
+      const dataUri = await processImageToDataUri(file);
+      setPendingDataUri(dataUri);
+      setRemoveAvatar(false);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || '画像の処理に失敗しました');
+    } finally {
+      setProcessing(false);
     }
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPendingFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
-    setRemoveAvatar(false);
   };
 
-  const onFileChange = (e) => {
-    handlePickFile(e.target.files?.[0] || null);
+  // ─── 「画像を選択」ボタン：動的 <input> 生成 → .click() ───
+  // この関数はユーザーのクリックハンドラの直接の同期処理として呼ばれること
+  const handlePickClick = async () => {
+    try {
+      const file = await pickImageFile();
+      if (file) await ingestFile(file);
+    } catch (err) {
+      console.error(err);
+      setError('ファイル選択でエラーが発生しました');
+    }
   };
 
+  // ─── ドラッグ&ドロップ ───
   const onDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    handlePickFile(e.dataTransfer?.files?.[0] || null);
+    const file = e.dataTransfer?.files?.[0];
+    if (file) ingestFile(file);
   };
-
   const onDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
   };
 
   const handleClearPending = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPendingFile(null);
-    setPreviewUrl(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    setPendingDataUri(null);
   };
 
   const handleRemoveCurrent = () => {
-    handleClearPending();
+    setPendingDataUri(null);
     setRemoveAvatar(true);
   };
 
@@ -277,32 +277,16 @@ function ProfileEditor({ profile, onSaved }) {
     setError('');
     setSaving(true);
     try {
-      let nextUrl = savedUrl || null;
+      let nextSrc = savedSrc || null;
+      if (pendingDataUri) nextSrc = pendingDataUri;
+      if (removeAvatar)   nextSrc = null;
 
-      // 1) 新ファイルのアップロード
-      if (pendingFile) {
-        nextUrl = await uploadAvatar(pendingFile);
-      }
-
-      // 2) 削除フラグ
-      if (removeAvatar) {
-        nextUrl = null;
-      }
-
-      // 3) DB 更新
       await updateProfile(profile.id, {
         full_name: name.trim(),
-        avatar_url: nextUrl,
+        avatar_url: nextSrc,
       });
 
-      // 4) 古いアバターを Storage から削除（差し替え or 削除フラグの場合）
-      const replaced = pendingFile || removeAvatar;
-      if (replaced && savedUrl && isStorageAvatar(savedUrl) && savedUrl !== nextUrl) {
-        await deleteAvatarByUrl(savedUrl);
-      }
-
-      // 5) ローカル状態を片付け
-      handleClearPending();
+      setPendingDataUri(null);
       setRemoveAvatar(false);
 
       await onSaved?.();
@@ -314,10 +298,16 @@ function ProfileEditor({ profile, onSaved }) {
     }
   };
 
-  // 表示用：プレビュー（新ファイル）> 削除フラグなら未設定 > 既存 DB
-  const displayedSrc = previewUrl
-    ? previewUrl
-    : (removeAvatar ? null : (savedUrl || null));
+  // 表示用：保留中の data URI > 削除フラグなら未設定 > 既存 DB
+  const displayedSrc = pendingDataUri
+    ? pendingDataUri
+    : (removeAvatar ? null : (savedSrc || null));
+
+  const statusLine = pendingDataUri
+    ? `新しい画像を選択中（保存で確定）`
+    : (removeAvatar
+        ? '保存時に画像を削除します'
+        : (savedSrc ? '現在の画像が設定されています' : '画像は未設定'));
 
   return (
     <Card title="プロフィール編集" Icon={User}>
@@ -331,19 +321,13 @@ function ProfileEditor({ profile, onSaved }) {
         />
       </FormField>
 
-      <FormField label="プロフィール画像" hint="PNG / JPG（最大 5 MB）。クリック または ドラッグ&ドロップ">
+      <FormField
+        label="プロフィール画像"
+        hint={`PNG / JPG（最大 ${(AVATAR_MAX_FILE_BYTES / 1024 / 1024).toFixed(0)} MB）。256×256 に自動リサイズして保存`}
+      >
         <div
           onDrop={onDrop}
           onDragOver={onDragOver}
-          onClick={() => fileInputRef.current?.click()}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              fileInputRef.current?.click();
-            }
-          }}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -351,56 +335,45 @@ function ProfileEditor({ profile, onSaved }) {
             padding: S.m,
             border: `1px dashed ${C.border}`,
             borderRadius: '8px',
-            cursor: 'pointer',
-            transition: 'border-color 0.15s, background 0.15s',
             background: C.surface,
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = C.accent;
-            e.currentTarget.style.background = C.bg;
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = C.border;
-            e.currentTarget.style.background = C.surface;
+            transition: 'border-color 0.15s, background 0.15s',
           }}
         >
           <Avatar name={name} src={displayedSrc} size={64} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: S.xs, color: C.text, fontWeight: 700, fontSize: '0.857rem' }}>
               <Upload size={14} color={C.accent} />
-              {pendingFile ? `選択中：${pendingFile.name}` : 'クリックしてファイル選択 / ドラッグ&ドロップ'}
+              {processing ? '処理中…' : 'ボタンから選択 または ここにドラッグ&ドロップ'}
             </div>
             <div style={{ fontSize: '0.75rem', color: C.textMuted, marginTop: '2px' }}>
-              {pendingFile
-                ? `${(pendingFile.size / 1024).toFixed(0)} KB / ${pendingFile.type}`
-                : (removeAvatar
-                    ? '保存時に画像を削除します'
-                    : (savedUrl ? '現在の画像が設定されています' : '画像は未設定'))}
+              {statusLine}
             </div>
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={AVATAR_ACCEPT.join(',')}
-            onChange={onFileChange}
-            style={{ display: 'none' }}
-          />
         </div>
 
         {/* アクションボタン */}
         <div style={{ display: 'flex', gap: S.xs, marginTop: S.s, flexWrap: 'wrap' }}>
-          {pendingFile && (
-            <Button variant="secondary" size="sm" onClick={handleClearPending}>
+          <Button
+            type="button"
+            size="sm"
+            Icon={Upload}
+            onClick={handlePickClick}
+            disabled={processing || saving}
+          >
+            画像を選択
+          </Button>
+          {pendingDataUri && (
+            <Button type="button" variant="secondary" size="sm" onClick={handleClearPending} disabled={saving}>
               選択をキャンセル
             </Button>
           )}
-          {(savedUrl || pendingFile) && !removeAvatar && (
-            <Button variant="secondary" size="sm" Icon={Trash2} onClick={handleRemoveCurrent}>
+          {(savedSrc || pendingDataUri) && !removeAvatar && (
+            <Button type="button" variant="secondary" size="sm" Icon={Trash2} onClick={handleRemoveCurrent} disabled={saving}>
               画像を削除
             </Button>
           )}
           {removeAvatar && (
-            <Button variant="secondary" size="sm" onClick={() => setRemoveAvatar(false)}>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setRemoveAvatar(false)} disabled={saving}>
               削除を取り消す
             </Button>
           )}

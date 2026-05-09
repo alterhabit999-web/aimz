@@ -20,5 +20,4 @@ export * from './schedule-participants';
 export * from './notifications';
 export * from './invitations';
 export * from './project-files';
-export * from './avatars';
 export * from './comments';

@@ -27,13 +27,7 @@ export const teams = new Teams(client);          // チーム管理
 export const DATABASE_ID = process.env.REACT_APP_APPWRITE_DATABASE_ID || '';
 export const STORAGE_BUCKET_ID = process.env.REACT_APP_APPWRITE_STORAGE_BUCKET_ID || '';
 
-/**
- * AVATAR_BUCKET_ID — プロフィール画像の保存先 Bucket ID。
- *   Appwrite Free プランの Bucket 上限のため、現状は STORAGE_BUCKET_ID と
- *   同一の Bucket を共用している（v15）。
- *   将来プランアップグレードで avatars 専用 Bucket に分けられるよう、
- *   定数として独立させておく。
- */
-export const AVATAR_BUCKET_ID = STORAGE_BUCKET_ID;
+// v18：アバター画像は base64 data URI として profiles.avatar_url に直接保存する方式に変更。
+// AVATAR_BUCKET_ID 定数は撤去（Storage アップロード方式は廃止）。
 
 export default client;
