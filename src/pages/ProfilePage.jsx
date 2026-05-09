@@ -190,7 +190,6 @@ export default function ProfilePage() {
 // プロフィール編集
 // ============================================================
 function ProfileEditor({ profile, onSaved }) {
-  console.log('[avatar] ProfileEditor RENDER', new Date().toISOString());
   const fileInputRef = useRef(null);
 
   const [name, setName]                 = useState(profile.full_name || '');
@@ -230,44 +229,29 @@ function ProfileEditor({ profile, onSaved }) {
 
   // ─── ファイル選択 / ドロップ ───
   const handlePickFile = (file) => {
-    console.log('[avatar] handlePickFile', { file, name: file?.name, size: file?.size, type: file?.type });
     setError('');
-    if (!file) {
-      console.log('[avatar] file is null, returning');
-      return;
-    }
+    if (!file) return;
     if (file.size > AVATAR_MAX_BYTES) {
-      console.log('[avatar] size too large');
       setError(`ファイルサイズは ${(AVATAR_MAX_BYTES / 1_000_000).toFixed(0)} MB 以下にしてください`);
       return;
     }
-    // 拡張子で判定（file.type が空 / 非標準なブラウザでも通せるように）
-    const ext = (file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] || '').toLowerCase();
-    const okByExt = ['png', 'jpg', 'jpeg'].includes(ext);
-    const okByType = !file.type || AVATAR_ACCEPT.includes(file.type);
-    console.log('[avatar] validation', { ext, okByExt, okByType });
-    if (!okByExt || !okByType) {
+    if (!AVATAR_ACCEPT.includes(file.type)) {
       setError('PNG / JPG / JPEG のみアップロードできます');
       return;
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    const blob = URL.createObjectURL(file);
-    console.log('[avatar] state set', { blob });
     setPendingFile(file);
-    setPreviewUrl(blob);
+    setPreviewUrl(URL.createObjectURL(file));
     setRemoveAvatar(false);
   };
 
   const onFileChange = (e) => {
-    const file = e.target.files?.[0] || null;
-    console.log('[avatar] onFileChange fired', { file, filesLength: e.target.files?.length });
-    handlePickFile(file);
+    handlePickFile(e.target.files?.[0] || null);
   };
 
   const onDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('[avatar] onDrop fired', { files: e.dataTransfer?.files });
     handlePickFile(e.dataTransfer?.files?.[0] || null);
   };
 
@@ -348,33 +332,18 @@ function ProfileEditor({ profile, onSaved }) {
       </FormField>
 
       <FormField label="プロフィール画像" hint="PNG / JPG（最大 5 MB）。クリック または ドラッグ&ドロップ">
-        {/*
-          input は label の外（兄弟）に置き htmlFor で接続。
-          内側にネストすると、プログラマティック click が親に再バブル / display:none で
-          file picker が起動しないブラウザがあるため、視覚的に隠す sr-only パターンを採用。
-        */}
-        <input
-          id="avatar-file-input"
-          ref={fileInputRef}
-          type="file"
-          accept={AVATAR_ACCEPT.join(',')}
-          onChange={onFileChange}
-          style={{
-            position: 'absolute',
-            width: 1,
-            height: 1,
-            padding: 0,
-            margin: -1,
-            overflow: 'hidden',
-            clip: 'rect(0, 0, 0, 0)',
-            whiteSpace: 'nowrap',
-            border: 0,
-          }}
-        />
-        <label
-          htmlFor="avatar-file-input"
+        <div
           onDrop={onDrop}
           onDragOver={onDragOver}
+          onClick={() => fileInputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -403,13 +372,20 @@ function ProfileEditor({ profile, onSaved }) {
             </div>
             <div style={{ fontSize: '0.75rem', color: C.textMuted, marginTop: '2px' }}>
               {pendingFile
-                ? `${(pendingFile.size / 1024).toFixed(0)} KB${pendingFile.type ? ` / ${pendingFile.type}` : ''}`
+                ? `${(pendingFile.size / 1024).toFixed(0)} KB / ${pendingFile.type}`
                 : (removeAvatar
                     ? '保存時に画像を削除します'
                     : (savedUrl ? '現在の画像が設定されています' : '画像は未設定'))}
             </div>
           </div>
-        </label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={AVATAR_ACCEPT.join(',')}
+            onChange={onFileChange}
+            style={{ display: 'none' }}
+          />
+        </div>
 
         {/* アクションボタン */}
         <div style={{ display: 'flex', gap: S.xs, marginTop: S.s, flexWrap: 'wrap' }}>
