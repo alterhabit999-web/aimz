@@ -219,20 +219,23 @@ function ProfileEditor({ profile, onSaved }) {
 
   // 共通：File を受けてリサイズ→data URI 化→state にセット
   const ingestFile = async (file) => {
+    console.log('[avatar] ingestFile called with', file?.name, file?.size, file?.type);
     setError('');
     if (!file) return;
     const v = validateImageFile(file);
     if (!v.ok) {
+      console.log('[avatar] validation failed:', v.error);
       setError(v.error);
       return;
     }
     setProcessing(true);
     try {
       const dataUri = await processImageToDataUri(file);
+      console.log('[avatar] dataUri produced, length=', dataUri.length);
       setPendingDataUri(dataUri);
       setRemoveAvatar(false);
     } catch (err) {
-      console.error(err);
+      console.error('[avatar] processImageToDataUri error:', err);
       setError(err?.message || '画像の処理に失敗しました');
     } finally {
       setProcessing(false);
@@ -242,11 +245,13 @@ function ProfileEditor({ profile, onSaved }) {
   // ─── 「画像を選択」ボタン：動的 <input> 生成 → .click() ───
   // この関数はユーザーのクリックハンドラの直接の同期処理として呼ばれること
   const handlePickClick = async () => {
+    console.log('[avatar] handlePickClick: button clicked');
     try {
       const file = await pickImageFile();
+      console.log('[avatar] handlePickClick: pickImageFile resolved with', file);
       if (file) await ingestFile(file);
     } catch (err) {
-      console.error(err);
+      console.error('[avatar] handlePickClick error:', err);
       setError('ファイル選択でエラーが発生しました');
     }
   };
@@ -255,6 +260,7 @@ function ProfileEditor({ profile, onSaved }) {
   const onDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log('[avatar] onDrop fired, files=', e.dataTransfer?.files);
     const file = e.dataTransfer?.files?.[0];
     if (file) ingestFile(file);
   };
