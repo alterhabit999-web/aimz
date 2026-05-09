@@ -204,6 +204,14 @@ function ProfileEditor({ profile, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
+  // 診断用：画面上に表示するイベントログ
+  const [diagLog, setDiagLog] = useState([]);
+  const pushDiag = (msg) => {
+    const line = `${new Date().toLocaleTimeString()} ${msg}`;
+    console.log('[avatar]', line);
+    setDiagLog(prev => [...prev, line].slice(-30));
+  };
+
   // 親の profile が変わったら追随（reload 後）
   useEffect(() => {
     setName(profile.full_name || '');
@@ -219,22 +227,27 @@ function ProfileEditor({ profile, onSaved }) {
 
   // 共通：File を受けてリサイズ→data URI 化→state にセット
   const ingestFile = async (file) => {
-    console.log('[avatar] ingestFile called with', file?.name, file?.size, file?.type);
+    pushDiag(`ingestFile name=${file?.name} size=${file?.size} type=${file?.type}`);
     setError('');
-    if (!file) return;
+    if (!file) {
+      pushDiag('ingestFile: file is null, abort');
+      return;
+    }
     const v = validateImageFile(file);
     if (!v.ok) {
-      console.log('[avatar] validation failed:', v.error);
+      pushDiag(`validation FAILED: ${v.error}`);
       setError(v.error);
       return;
     }
+    pushDiag('validation OK, processing...');
     setProcessing(true);
     try {
       const dataUri = await processImageToDataUri(file);
-      console.log('[avatar] dataUri produced, length=', dataUri.length);
+      pushDiag(`dataUri produced, length=${dataUri.length}`);
       setPendingDataUri(dataUri);
       setRemoveAvatar(false);
     } catch (err) {
+      pushDiag(`process ERROR: ${err?.message || err}`);
       console.error('[avatar] processImageToDataUri error:', err);
       setError(err?.message || '画像の処理に失敗しました');
     } finally {
@@ -245,12 +258,13 @@ function ProfileEditor({ profile, onSaved }) {
   // ─── 「画像を選択」ボタン：動的 <input> 生成 → .click() ───
   // この関数はユーザーのクリックハンドラの直接の同期処理として呼ばれること
   const handlePickClick = async () => {
-    console.log('[avatar] handlePickClick: button clicked');
+    pushDiag('handlePickClick: button clicked');
     try {
       const file = await pickImageFile();
-      console.log('[avatar] handlePickClick: pickImageFile resolved with', file);
+      pushDiag(`pickImageFile resolved: file=${file ? file.name : 'null'}`);
       if (file) await ingestFile(file);
     } catch (err) {
+      pushDiag(`handlePickClick ERROR: ${err?.message || err}`);
       console.error('[avatar] handlePickClick error:', err);
       setError('ファイル選択でエラーが発生しました');
     }
@@ -260,9 +274,18 @@ function ProfileEditor({ profile, onSaved }) {
   const onDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('[avatar] onDrop fired, files=', e.dataTransfer?.files);
-    const file = e.dataTransfer?.files?.[0];
+    const fileList = e.dataTransfer?.files;
+    pushDiag(`onDrop fired, files.length=${fileList?.length ?? 'undefined'}`);
+    const file = fileList?.[0];
     if (file) ingestFile(file);
+  };
+  const onDragEnter = (e) => {
+    e.preventDefault();
+    pushDiag('onDragEnter');
+  };
+  const onDragLeave = (e) => {
+    e.preventDefault();
+    pushDiag('onDragLeave');
   };
   const onDragOver = (e) => {
     e.preventDefault();
@@ -334,6 +357,8 @@ function ProfileEditor({ profile, onSaved }) {
         <div
           onDrop={onDrop}
           onDragOver={onDragOver}
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -398,6 +423,43 @@ function ProfileEditor({ profile, onSaved }) {
           {error}
         </div>
       )}
+
+      {/* 一時的な診断ログパネル（v18 デバッグ用、原因特定後に撤去） */}
+      <details open style={{
+        marginTop: S.m,
+        padding: S.s,
+        background: '#fffbea',
+        border: '1px dashed #ffcc17',
+        borderRadius: '6px',
+        fontSize: '0.75rem',
+      }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#7a5a00' }}>
+          🐛 アバター診断ログ（{diagLog.length} 件）
+        </summary>
+        <div style={{
+          marginTop: '6px',
+          padding: '6px',
+          background: '#fff',
+          borderRadius: '4px',
+          fontFamily: 'monospace',
+          fontSize: '0.7rem',
+          maxHeight: '200px',
+          overflowY: 'auto',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
+        }}>
+          {diagLog.length === 0
+            ? '（まだイベントがありません）'
+            : diagLog.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+        <button
+          type="button"
+          onClick={() => setDiagLog([])}
+          style={{ marginTop: '4px', fontSize: '0.7rem', padding: '2px 8px' }}
+        >
+          ログをクリア
+        </button>
+      </details>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: S.m }}>
         <Button onClick={handleSave} disabled={!dirty || saving || !name.trim()}>
