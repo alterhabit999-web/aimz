@@ -235,7 +235,11 @@ function ProfileEditor({ profile, onSaved }) {
       setError(`ファイルサイズは ${(AVATAR_MAX_BYTES / 1_000_000).toFixed(0)} MB 以下にしてください`);
       return;
     }
-    if (!AVATAR_ACCEPT.includes(file.type)) {
+    // 拡張子で判定（file.type が空 / 非標準なブラウザでも通せるように）
+    const ext = (file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] || '').toLowerCase();
+    const okByExt = ['png', 'jpg', 'jpeg'].includes(ext);
+    const okByType = !file.type || AVATAR_ACCEPT.includes(file.type);
+    if (!okByExt || !okByType) {
       setError('PNG / JPG / JPEG のみアップロードできます');
       return;
     }

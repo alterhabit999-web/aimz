@@ -2,8 +2,9 @@
  * api/team-members.js — team_members（チームメンバー中間テーブル）へのアクセス
  *
  * 設計：
- *   - documentId は `${team_id}_${user_id}` の合成キーにして冪等性を担保
- *     （Appwrite の docId 規約：a-z A-Z 0-9 . - _ のみ → アンダースコアで OK）
+ *   - documentId は ID.unique() で発行（Appwrite docId は 36 文字制限のため、
+ *     合成キーだと Appwrite Auth の userId × teamId の組合せで上限を超える）
+ *   - 一意性は (team_id, user_id) のクエリで担保
  *   - role は 'leader' | 'member'
  *
  * 提供 API：
@@ -13,7 +14,7 @@
  *   - deleteAllForTeam(teamId)：チーム削除時に呼ぶ
  */
 
-import { Query } from 'appwrite';
+import { ID, Query } from 'appwrite';
 import { databases, DATABASE_ID } from '../appwrite';
 import { COLLECTIONS } from './collections';
 
@@ -21,7 +22,15 @@ const COL = COLLECTIONS.TEAM_MEMBERS;
 
 const normalize = (doc) => doc ? { ...doc, id: doc.$id } : null;
 
-const docIdOf = (teamId, userId) => `${teamId}_${userId}`;
+/** team_id + user_id で既存メンバーシップを検索（旧式合成キー時代の docId にも対応） */
+async function findMembership(teamId, userId) {
+  const res = await databases.listDocuments(DATABASE_ID, COL, [
+    Query.equal('team_id', teamId),
+    Query.equal('user_id', userId),
+    Query.limit(1),
+  ]);
+  return res.documents[0] || null;
+}
 
 /** 全 team_members（dummy.js の DUMMY_TEAM_MEMBERS と同等） */
 export async function listAllTeamMembers({ limit = 500 } = {}) {
@@ -49,26 +58,23 @@ export async function listMembershipsByUser(userId) {
 
 /** メンバー追加（既存なら role を上書き） */
 export async function addMember(teamId, userId, role = 'member') {
-  const id = docIdOf(teamId, userId);
-  try {
-    const doc = await databases.createDocument(DATABASE_ID, COL, id, {
-      team_id: teamId, user_id: userId, role,
-    });
+  const existing = await findMembership(teamId, userId);
+  if (existing) {
+    if (existing.role === role) return normalize(existing);
+    const doc = await databases.updateDocument(DATABASE_ID, COL, existing.$id, { role });
     return normalize(doc);
-  } catch (err) {
-    if (err?.code === 409) {
-      // 既存 → role 更新
-      const doc = await databases.updateDocument(DATABASE_ID, COL, id, { role });
-      return normalize(doc);
-    }
-    throw err;
   }
+  const doc = await databases.createDocument(DATABASE_ID, COL, ID.unique(), {
+    team_id: teamId, user_id: userId, role,
+  });
+  return normalize(doc);
 }
 
 export async function removeMember(teamId, userId) {
-  const id = docIdOf(teamId, userId);
+  const existing = await findMembership(teamId, userId);
+  if (!existing) return null;
   try {
-    return await databases.deleteDocument(DATABASE_ID, COL, id);
+    return await databases.deleteDocument(DATABASE_ID, COL, existing.$id);
   } catch (err) {
     if (err?.code === 404) return null;
     throw err;
@@ -76,8 +82,9 @@ export async function removeMember(teamId, userId) {
 }
 
 export async function updateRole(teamId, userId, role) {
-  const id = docIdOf(teamId, userId);
-  const doc = await databases.updateDocument(DATABASE_ID, COL, id, { role });
+  const existing = await findMembership(teamId, userId);
+  if (!existing) return null;
+  const doc = await databases.updateDocument(DATABASE_ID, COL, existing.$id, { role });
   return normalize(doc);
 }
 

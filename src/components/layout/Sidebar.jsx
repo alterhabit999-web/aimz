@@ -83,11 +83,12 @@ export default function Sidebar({ open, user, departments = [] }) {
 
       {/* ナビゲーション */}
       <nav style={{ flex: 1, padding: S.s, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <SectionLabel>メニュー</SectionLabel>
+        <NavItem to="/notifications" label="通知"           Icon={Bell} />
+
+        <SectionLabel style={{ marginTop: S.s }}>メニュー</SectionLabel>
         <NavItem to="/dashboard"     label="ダッシュボード" Icon={LayoutDashboard} />
         <NavItem to="/projects"      label="案件一覧"       Icon={FolderOpen} />
         <NavItem to="/teams"         label="チーム"         Icon={Users} />
-        <NavItem to="/notifications" label="通知"           Icon={Bell} />
 
         {user?.is_admin && (
           <>
