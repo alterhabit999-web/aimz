@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GanttChartSquare, Plus } from 'lucide-react';
+import { GanttChartSquare, Plus, Calendar } from 'lucide-react';
 import { C, S } from '../../../styles/tokens';
 import { useAuth } from '../../../contexts/AuthContext';
 import Badge, { statusVariant } from '../../ui/Badge';
 import Button from '../../ui/Button';
 import TaskDetailModal from '../../tasks/TaskDetailModal';
+import ScheduleFormModal, { loadScheduleParticipantIds } from '../../schedules/ScheduleFormModal';
 import {
   listTasksByProject,
   listSubtasksByTask,
@@ -16,7 +17,9 @@ import {
   setSubtasksForTask,
   deleteAllSubtasksForTask,
   syncProjectStatusFromTasks,
+  listSchedulesByProject,
 } from '../../../api';
+import { formatTime } from '../../../utils/format';
 import useReloadOnFocus from '../../../hooks/useReloadOnFocus';
 
 /**
@@ -71,12 +74,17 @@ export default function GanttTab({ project }) {
   const [subtasksByTaskMap, setStMap]   = useState(new Map());
   const [profiles, setProfiles]         = useState([]);
   const [teamMembers, setTeamMembers]   = useState([]);
+  const [schedules, setSchedules]       = useState([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
 
   const [modalOpen, setModalOpen]       = useState(false);
   const [modalMode, setModalMode]       = useState('create');
   const [selectedTask, setSelectedTask] = useState(null);
+
+  // 予定（schedule）モーダル
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleModalInitial, setScheduleModalInitial] = useState(null);
 
   const allowCreate = useMemo(() => {
     if (!user) return false;
@@ -88,10 +96,11 @@ export default function GanttTab({ project }) {
     setLoading(true);
     setError(null);
     try {
-      const [ts, pr, tm] = await Promise.all([
+      const [ts, pr, tm, ss] = await Promise.all([
         listTasksByProject(project.id),
         listProfiles({ limit: 200 }),
         listAllTeamMembers(),
+        listSchedulesByProject(project.id),
       ]);
       const stEntries = await Promise.all(
         ts.map(async t => [t.id, await listSubtasksByTask(t.id)])
@@ -100,6 +109,7 @@ export default function GanttTab({ project }) {
       setStMap(new Map(stEntries));
       setProfiles(pr);
       setTeamMembers(tm);
+      setSchedules(ss);
     } catch (err) {
       console.error(err);
       setError(err?.message || 'タスクの取得に失敗しました');
@@ -146,6 +156,21 @@ export default function GanttTab({ project }) {
     await reload();
   };
 
+  // ─── 予定行クリック：編集モーダルを開く（v19） ───
+  const openScheduleEdit = async (schedule) => {
+    try {
+      const ids = await loadScheduleParticipantIds(schedule.id);
+      setScheduleModalInitial({ ...schedule, _participantIds: ids });
+      setScheduleModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      alert('予定の取得に失敗しました：' + (err?.message || ''));
+    }
+  };
+  const handleScheduleSaved = async () => {
+    await reload();
+  };
+
   // ─── ドラッグでタスクの日程を更新 ───
   const handleTaskDateUpdate = async (taskId, patch) => {
     // 楽観更新
@@ -161,15 +186,27 @@ export default function GanttTab({ project }) {
   };
 
   // ─── タイムラインの期間 ───
+  // project.start_date/end_date を基本にしつつ、予定（schedules）の日付範囲も
+  // カバーするように両端を広げる（予定が案件期間外でも見えるように）
   const timeline = useMemo(() => {
-    const startStr = project.start_date || tasks[0]?.start_date || tasks[0]?.due_date;
-    const endStr = project.end_date || tasks[tasks.length - 1]?.due_date || tasks[tasks.length - 1]?.start_date;
-    if (!startStr || !endStr) return null;
+    const candidatesStart = [
+      project.start_date,
+      tasks[0]?.start_date, tasks[0]?.due_date,
+      ...schedules.map(s => s.start_at && s.start_at.slice(0, 10)),
+    ].filter(Boolean);
+    const candidatesEnd = [
+      project.end_date,
+      tasks[tasks.length - 1]?.due_date, tasks[tasks.length - 1]?.start_date,
+      ...schedules.map(s => (s.end_at || s.start_at)?.slice(0, 10)),
+    ].filter(Boolean);
+    if (candidatesStart.length === 0 || candidatesEnd.length === 0) return null;
+    const startStr = candidatesStart.sort()[0];
+    const endStr   = candidatesEnd.sort().slice(-1)[0];
     const start = toMidnight(startStr);
     const end = toMidnight(endStr);
     const totalDays = Math.max(1, diffDays(start, end) + 1);
     return { start, end, totalDays };
-  }, [project.start_date, project.end_date, tasks]);
+  }, [project.start_date, project.end_date, tasks, schedules]);
 
   return (
     <div>
@@ -198,7 +235,7 @@ export default function GanttTab({ project }) {
         <div style={{ padding: S.xl, textAlign: 'center', color: C.textMuted }}>
           読み込み中...
         </div>
-      ) : tasks.length === 0 ? (
+      ) : tasks.length === 0 && schedules.length === 0 ? (
         <EmptyTasks />
       ) : !timeline ? (
         <div style={{ padding: S.xl, textAlign: 'center', color: C.textMuted }}>
@@ -207,9 +244,11 @@ export default function GanttTab({ project }) {
       ) : (
         <GanttChart
           tasks={tasks}
+          schedules={schedules}
           timeline={timeline}
           editable={allowCreate}
           onRowClick={openEdit}
+          onScheduleClick={openScheduleEdit}
           onUpdate={handleTaskDateUpdate}
         />
       )}
@@ -226,6 +265,18 @@ export default function GanttTab({ project }) {
         onSubmit={handleSubmit}
         onDelete={handleDelete}
       />
+
+      {/* 予定モーダル（v19 ガント連携：行クリックで編集） */}
+      <ScheduleFormModal
+        open={scheduleModalOpen}
+        mode="edit"
+        initial={scheduleModalInitial}
+        project={project}
+        profiles={profiles}
+        currentUser={user}
+        onClose={() => setScheduleModalOpen(false)}
+        onSaved={handleScheduleSaved}
+      />
     </div>
   );
 }
@@ -233,13 +284,16 @@ export default function GanttTab({ project }) {
 // ============================================================
 // GanttChart 本体
 // ============================================================
-function GanttChart({ tasks, timeline, editable, onRowClick, onUpdate }) {
+function GanttChart({ tasks, schedules = [], timeline, editable, onRowClick, onScheduleClick, onUpdate }) {
   const { start, totalDays } = timeline;
   const totalWidth = totalDays * DAY_WIDTH;
 
   // 今日の x 位置
   const todayOffset = diffDays(start, new Date());
   const showToday = todayOffset >= 0 && todayOffset < totalDays;
+
+  // 区切り行の有無（今日線の高さ計算で使う）
+  const dividerRows = schedules.length > 0 ? 1 : 0;
 
   return (
     <div style={{
@@ -377,6 +431,95 @@ function GanttChart({ tasks, timeline, editable, onRowClick, onUpdate }) {
           </React.Fragment>
         ))}
 
+        {/* 予定セクション（v19）：タスク行の下に区切り + 行を並べる */}
+        {schedules.length > 0 && (
+          <>
+            {/* 区切り行（左：セクションラベル、右：薄い帯） */}
+            <div style={{
+              position: 'sticky',
+              left: 0,
+              zIndex: 1,
+              height: ROW_HEIGHT - 8,
+              background: C.bgSub,
+              borderTop: `1px solid ${C.border}`,
+              borderBottom: `1px solid ${C.border}`,
+              borderRight: `1px solid ${C.border}`,
+              padding: `0 ${S.s}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: S.xs,
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              color: C.textSub,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}>
+              <Calendar size={12} color={C.accent} />
+              予定
+            </div>
+            <div style={{
+              height: ROW_HEIGHT - 8,
+              background: C.bgSub,
+              borderTop: `1px solid ${C.border}`,
+              borderBottom: `1px solid ${C.border}`,
+            }} />
+
+            {/* 予定行 */}
+            {schedules.map(s => (
+              <React.Fragment key={s.id}>
+                <div
+                  onClick={() => onScheduleClick?.(s)}
+                  style={{
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 1,
+                    height: ROW_HEIGHT,
+                    background: C.surface,
+                    borderBottom: `1px solid ${C.border}`,
+                    borderRight: `1px solid ${C.border}`,
+                    padding: `0 ${S.s}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: S.xs,
+                    fontSize: '0.857rem',
+                    cursor: 'pointer',
+                    overflow: 'hidden',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                  onMouseLeave={e => e.currentTarget.style.background = C.surface}
+                >
+                  <Calendar size={12} color={C.accent} style={{ flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      color: C.text,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      fontSize: '0.8rem',
+                    }}>
+                      {s.title}
+                    </div>
+                    <div style={{
+                      fontSize: '0.7rem',
+                      color: C.textSub,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      {formatTime(s.start_at)} – {formatTime(s.end_at)}
+                    </div>
+                  </div>
+                </div>
+                <ScheduleRow
+                  schedule={s}
+                  start={start}
+                  totalDays={totalDays}
+                  onClick={() => onScheduleClick?.(s)}
+                />
+              </React.Fragment>
+            ))}
+          </>
+        )}
+
         {/* 今日の縦線（全行を横断するため絶対配置） */}
         {showToday && (
           <div style={{
@@ -384,7 +527,7 @@ function GanttChart({ tasks, timeline, editable, onRowClick, onUpdate }) {
             top: HEADER_HEIGHT,
             left: NAME_COL_WIDTH + todayOffset * DAY_WIDTH + DAY_WIDTH / 2,
             width: '2px',
-            height: tasks.length * ROW_HEIGHT,
+            height: tasks.length * ROW_HEIGHT + (dividerRows ? (ROW_HEIGHT - 8) : 0) + schedules.length * ROW_HEIGHT,
             background: C.danger,
             opacity: 0.5,
             pointerEvents: 'none',
@@ -597,6 +740,107 @@ function GanttRow({ task, start, totalDays, editable, onClick, onUpdate }) {
               }}
             />
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// ScheduleRow — ガント上の予定 1 件分の横バー（v19）
+// 範囲：start_at の日付から end_at の日付まで（時刻は無視して日単位）
+// バー：枠線 + 半透明塗り + accent カラー（タスクのソリッドバーと差別化）
+// ドラッグ不可（時刻情報の損失を防ぐため、編集は ScheduleFormModal 経由のみ）
+// ============================================================
+function ScheduleRow({ schedule, start, totalDays, onClick }) {
+  const sStr = schedule.start_at?.slice(0, 10);
+  const eStr = (schedule.end_at || schedule.start_at)?.slice(0, 10);
+  const sDate = sStr ? toMidnight(sStr) : null;
+  const eDate = eStr ? toMidnight(eStr) : null;
+
+  // 範囲が無いものは描画しない
+  const hasBar = sDate && eDate;
+  const rawOffset = hasBar ? diffDays(start, sDate) : 0;
+  const rawEnd    = hasBar ? diffDays(start, eDate) : 0;
+
+  // タイムライン外をクリップ
+  const offset = Math.max(0, rawOffset);
+  const endIdx = Math.min(totalDays - 1, rawEnd);
+  const span = hasBar ? Math.max(1, endIdx - offset + 1) : 1;
+  const visible = hasBar && rawEnd >= 0 && rawOffset < totalDays;
+
+  const x = offset * DAY_WIDTH;
+  const width = span * DAY_WIDTH - 4;
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        height: ROW_HEIGHT,
+        borderBottom: `1px solid ${C.border}`,
+        background: C.surface,
+        cursor: 'pointer',
+      }}
+      onClick={onClick}
+    >
+      {/* 日ごとの縦線 */}
+      {Array.from({ length: totalDays }, (_, i) => {
+        const d = dateAddDays(start, i);
+        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: i * DAY_WIDTH,
+              top: 0,
+              bottom: 0,
+              width: DAY_WIDTH,
+              borderRight: `1px solid ${C.border}`,
+              background: isWeekend ? `${C.dangerBg}40` : 'transparent',
+            }}
+          />
+        );
+      })}
+
+      {/* 予定バー（枠線 + 半透明塗り + 斜線で差別化） */}
+      {visible && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 6,
+            height: ROW_HEIGHT - 12,
+            left: x + 2,
+            width,
+            background: `repeating-linear-gradient(
+              45deg,
+              ${C.accentLight},
+              ${C.accentLight} 6px,
+              ${C.surface} 6px,
+              ${C.surface} 10px
+            )`,
+            border: `2px solid ${C.accent}`,
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            paddingLeft: '6px',
+            color: C.accent,
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            boxShadow: C.shadow1,
+            overflow: 'hidden',
+          }}
+          title={`${schedule.title} ${formatTime(schedule.start_at)}–${formatTime(schedule.end_at)}`}
+        >
+          <span style={{
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            paddingRight: '6px',
+            textShadow: '0 0 2px #fff',
+          }}>
+            {schedule.title}
+          </span>
         </div>
       )}
     </div>
