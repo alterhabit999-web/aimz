@@ -5,7 +5,6 @@ import AppShell from './components/layout/AppShell';
 import RequireAuth from './components/layout/RequireAuth';
 
 import LoginPage from './pages/LoginPage';
-import InvitationAcceptPage from './pages/InvitationAcceptPage';
 import DashboardPage from './pages/DashboardPage';
 import TeamsPage from './pages/TeamsPage';
 import ProjectsPage from './pages/ProjectsPage';
@@ -50,7 +49,6 @@ export default function App() {
         <Routes>
           {/* 未ログインでもアクセス可 */}
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/invitations/:token" element={<InvitationAcceptPage />} />
 
           {/* ログイン必須エリア */}
           <Route element={

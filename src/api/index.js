@@ -18,6 +18,5 @@ export * from './subtasks';
 export * from './schedules';
 export * from './schedule-participants';
 export * from './notifications';
-export * from './invitations';
 export * from './project-files';
 export * from './comments';

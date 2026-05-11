@@ -8,7 +8,6 @@ import {
   Crown,
   CheckCircle2,
   XCircle,
-  Mail,
 } from 'lucide-react';
 import { C, S, ICON_SM } from '../../styles/tokens';
 import Avatar from '../../components/ui/Avatar';
@@ -25,10 +24,8 @@ import {
   listAllTeamMembers,
   setUserMemberships,
 } from '../../api';
-import InviteUserModal from '../../components/users/InviteUserModal';
+import CreateUserModal from '../../components/users/CreateUserModal';
 import EditUserModal from '../../components/users/EditUserModal';
-import InvitationsModal from '../../components/users/InvitationsModal';
-import { useAuth } from '../../contexts/AuthContext';
 import useReloadOnFocus from '../../hooks/useReloadOnFocus';
 import useIsCompact from '../../hooks/useIsCompact';
 
@@ -44,12 +41,10 @@ import useIsCompact from '../../hooks/useIsCompact';
  * チームメンバーシップ判定はまだダミー（後続フェーズで実 DB 化）。
  */
 export default function UsersPage() {
-  const { user } = useAuth();
   const isCompact = useIsCompact();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all'); // all | admin | leader | active | inactive
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -121,9 +116,9 @@ export default function UsersPage() {
     });
   }, [profiles, query, filter, isTeamLeaderOf]);
 
-  const handleInvited = (data) => {
-    // 招待発行後の動作は InviteUserModal 内で完結（invitations にトークンを保存）
-    console.log('ユーザー招待:', data);
+  const handleCreated = async () => {
+    // CreateUserModal 内で Auth + profile を直接作成済み。一覧を更新するだけ。
+    await reload();
   };
 
   const handleEdit = async (data) => {
@@ -175,24 +170,16 @@ export default function UsersPage() {
             ユーザー管理
           </h1>
           <p style={{ color: C.textSub, fontSize: '0.857rem', marginTop: S.xs, marginBottom: 0 }}>
-            ユーザーの招待・権限変更・停止・削除を行います（管理者のみ）
+            ユーザーの追加・権限変更・停止・削除を行います（管理者のみ）
           </p>
         </div>
         <div style={{ display: 'flex', gap: S.xs, flexWrap: 'wrap' }}>
           <Button
-            Icon={Mail}
-            variant="secondary"
-            size={isCompact ? 'sm' : 'md'}
-            onClick={() => setHistoryOpen(true)}
-          >
-            招待履歴
-          </Button>
-          <Button
             Icon={UserPlus}
             size={isCompact ? 'sm' : 'md'}
-            onClick={() => setInviteOpen(true)}
+            onClick={() => setCreateOpen(true)}
           >
-            ユーザーを招待
+            ユーザーを作成
           </Button>
         </div>
       </div>
@@ -311,16 +298,10 @@ export default function UsersPage() {
       </div>
 
       {/* モーダル類 */}
-      <InviteUserModal
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        onInvited={handleInvited}
-      />
-
-      <InvitationsModal
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        currentUser={user}
+      <CreateUserModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={handleCreated}
       />
 
       <EditUserModal

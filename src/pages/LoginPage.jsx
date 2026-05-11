@@ -145,7 +145,7 @@ export default function LoginPage() {
           textAlign: 'center',
           marginTop: S.l,
         }}>
-          管理者から招待リンクを受け取った方は、リンクからアカウントを作成してください。
+          アカウントは管理者が作成します。ログイン情報が分からない場合は管理者にお問い合わせください。
         </p>
       </div>
     </div>
