@@ -5,6 +5,7 @@ import {
   Clock,
   UserPlus,
   MessageSquare,
+  AtSign,
   CheckCheck,
   Inbox,
 } from 'lucide-react';
@@ -32,17 +33,20 @@ const TYPE_ICON = {
   task_assigned: UserPlus,
   due_reminder:  Clock,
   comment:       MessageSquare,
+  mention:       AtSign,
 };
 
 const TYPE_LABEL = {
   task_assigned: 'タスクアサイン',
   due_reminder:  '期限リマインド',
   comment:       'コメント',
+  mention:       'メンション',
 };
 
 const FILTERS = [
   { id: 'all',           label: 'すべて' },
   { id: 'unread',        label: '未読のみ' },
+  { id: 'mention',       label: 'メンション' },
   { id: 'task_assigned', label: 'タスクアサイン' },
   { id: 'due_reminder',  label: '期限リマインド' },
 ];

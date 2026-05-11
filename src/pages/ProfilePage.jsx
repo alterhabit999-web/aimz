@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { User, Lock, LogOut, Crown, Shield, Upload, Trash2 } from 'lucide-react';
+import { User, Lock, LogOut, Crown, Shield, Upload, Trash2, Mail } from 'lucide-react';
 import { C, S } from '../styles/tokens';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -180,7 +180,12 @@ export default function ProfilePage() {
         <ProfileEditor profile={displayUser} onSaved={async () => { await reload(); await refresh(); }} />
       </div>
 
-      {/* パスワード変更（PHASE 4 で本実装） */}
+      {/* メールアドレス変更（v19 新規） */}
+      <div style={{ marginTop: S.m }}>
+        <EmailChanger profile={displayUser} onSaved={async () => { await reload(); await refresh(); }} />
+      </div>
+
+      {/* パスワード変更 */}
       <div style={{ marginTop: S.m }}>
         <PasswordChanger />
       </div>
@@ -519,6 +524,120 @@ function PasswordChanger() {
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button onClick={handleChange} disabled={saving}>
           {saving ? '変更中…' : 'パスワードを変更'}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+// ============================================================
+// メールアドレス変更（v19 新規、Appwrite Auth に接続）
+// ============================================================
+function EmailChanger({ profile, onSaved }) {
+  const [newEmail, setNewEmail]   = useState('');
+  const [password, setPassword]   = useState('');
+  const [error, setError]         = useState('');
+  const [success, setSuccess]     = useState('');
+  const [saving, setSaving]       = useState(false);
+
+  const currentEmail = profile?.email || '';
+
+  const handleChange = async () => {
+    setError('');
+    setSuccess('');
+    if (!newEmail.trim()) { setError('新しいメールアドレスを入力してください'); return; }
+    const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail.trim());
+    if (!ok) { setError('メールアドレスの形式が正しくありません'); return; }
+    if (newEmail.trim().toLowerCase() === currentEmail.toLowerCase()) {
+      setError('現在のメールアドレスと同じです');
+      return;
+    }
+    if (!password) { setError('現在のパスワードを入力してください'); return; }
+
+    setSaving(true);
+    try {
+      // 1) Appwrite Auth のメールを更新
+      await account.updateEmail(newEmail.trim(), password);
+      // 2) profiles.email も同期
+      await updateProfile(profile.id, { email: newEmail.trim() });
+
+      setSuccess('メールアドレスを変更しました');
+      setNewEmail('');
+      setPassword('');
+      await onSaved?.();
+    } catch (err) {
+      console.error(err);
+      let msg = err?.message || 'メールアドレスの変更に失敗しました';
+      if (/invalid credentials|password|wrong/i.test(msg)) {
+        msg = 'パスワードが正しくありません';
+      } else if (/already exists|email_already/i.test(msg)) {
+        msg = 'このメールアドレスは既に使われています';
+      } else if (/session/i.test(msg)) {
+        msg = 'セッションが切れています。再ログインしてからお試しください。';
+      }
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title="メールアドレス変更" Icon={Mail}>
+      <FormField label="現在のメールアドレス">
+        <input
+          type="email"
+          value={currentEmail}
+          disabled
+          style={{ ...inputStyle, background: C.bg, color: C.textSub, cursor: 'not-allowed' }}
+        />
+      </FormField>
+      <FormField label="新しいメールアドレス" required>
+        <input
+          type="email"
+          value={newEmail}
+          onChange={e => setNewEmail(e.target.value)}
+          placeholder="new@example.com"
+          style={inputStyle}
+        />
+      </FormField>
+      <FormField label="現在のパスワード" required hint="本人確認のため入力してください">
+        <input
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          placeholder="••••••••"
+          style={inputStyle}
+        />
+      </FormField>
+
+      {error && (
+        <div style={{
+          padding: S.s,
+          background: C.dangerBg,
+          color: C.danger,
+          borderRadius: '6px',
+          fontSize: '0.857rem',
+          marginBottom: S.s,
+        }}>
+          {error}
+        </div>
+      )}
+      {success && (
+        <div style={{
+          padding: S.s,
+          background: '#e8f4ec',
+          color: C.success,
+          borderRadius: '6px',
+          fontSize: '0.857rem',
+          marginBottom: S.s,
+        }}>
+          {success}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button onClick={handleChange} disabled={saving || !newEmail || !password}>
+          {saving ? '変更中…' : 'メールアドレスを変更'}
         </Button>
       </div>
     </Card>

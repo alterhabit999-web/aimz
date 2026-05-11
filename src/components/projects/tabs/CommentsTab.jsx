@@ -5,7 +5,6 @@ import { useAuth } from '../../../contexts/AuthContext';
 import Button from '../../ui/Button';
 import Avatar from '../../ui/Avatar';
 import ConfirmDialog from '../../ui/ConfirmDialog';
-import { textareaStyle } from '../../ui/FormField';
 import { formatTimeAgo } from '../../../utils/format';
 import {
   listCommentsByProject,
@@ -13,8 +12,10 @@ import {
   updateComment,
   deleteComment,
   listProfiles,
+  createNotification,
 } from '../../../api';
 import useReloadOnFocus from '../../../hooks/useReloadOnFocus';
+import MentionTextarea, { extractMentionedIds, renderMentionTokens } from './MentionTextarea';
 
 /**
  * CommentsTab — 案件詳細の「コメント」タブ（v17 新規）。
@@ -73,6 +74,29 @@ export default function CommentsTab({ project }) {
         user_id: user.id,
         body: text,
       });
+      // メンション通知：本文中の @<full_name> を抽出して該当ユーザーに通知
+      try {
+        const mentionedIds = extractMentionedIds(text, profiles)
+          .filter(id => id !== user.id);  // 自分宛は通知しない
+        const author = profiles.find(p => p.id === user.id);
+        const authorName = author?.full_name || user.full_name || '誰か';
+        const projectName = project.name || '案件';
+        const snippet = text.length > 80 ? text.slice(0, 80) + '…' : text;
+        await Promise.all(
+          mentionedIds.map(uid =>
+            createNotification({
+              user_id: uid,
+              type: 'mention',
+              title: `${authorName} があなたをコメントでメンションしました`,
+              body: `[${projectName}] ${snippet}`,
+              related_type: 'project',
+              related_id: project.id,
+            }).catch(err => console.warn('[mention] 通知作成失敗', uid, err?.message))
+          )
+        );
+      } catch (err) {
+        console.warn('[mention] 通知処理スキップ:', err?.message);
+      }
       setBody('');
       await reload();
     } catch (err) {
@@ -95,7 +119,32 @@ export default function CommentsTab({ project }) {
     const text = editBody.trim();
     if (!text) return;
     try {
+      // 編集前の本文と比較し、新たに増えたメンションのみ通知
+      const original = comments.find(c => c.id === editingId);
+      const before = new Set(extractMentionedIds(original?.body || '', profiles));
+      const afterIds = extractMentionedIds(text, profiles)
+        .filter(id => id !== user.id && !before.has(id));
+
       await updateComment(editingId, { body: text });
+
+      if (afterIds.length > 0) {
+        const author = profiles.find(p => p.id === user.id);
+        const authorName = author?.full_name || user.full_name || '誰か';
+        const projectName = project.name || '案件';
+        const snippet = text.length > 80 ? text.slice(0, 80) + '…' : text;
+        await Promise.all(
+          afterIds.map(uid =>
+            createNotification({
+              user_id: uid,
+              type: 'mention',
+              title: `${authorName} があなたをコメントでメンションしました`,
+              body: `[${projectName}] ${snippet}`,
+              related_type: 'project',
+              related_id: project.id,
+            }).catch(err => console.warn('[mention] 通知作成失敗', uid, err?.message))
+          )
+        );
+      }
       cancelEdit();
       await reload();
     } catch (err) {
@@ -177,6 +226,7 @@ export default function CommentsTab({ project }) {
             isEditing={editingId === c.id}
             editBody={editBody}
             onEditBodyChange={setEditBody}
+            profilesForEdit={profiles}
             onStartEdit={() => startEdit(c)}
             onCancelEdit={cancelEdit}
             onSaveEdit={saveEdit}
@@ -192,6 +242,7 @@ export default function CommentsTab({ project }) {
         onSubmit={handlePost}
         submitting={submitting}
         currentUser={user}
+        profiles={profiles}
       />
 
       <ConfirmDialog
@@ -213,6 +264,7 @@ function CommentItem({
   comment, author, isMine, canModify,
   isEditing, editBody, onEditBodyChange,
   onStartEdit, onCancelEdit, onSaveEdit, onRequestDelete,
+  profilesForEdit = [],
 }) {
   return (
     <div style={{
@@ -247,11 +299,11 @@ function CommentItem({
 
         {isEditing ? (
           <div>
-            <textarea
+            <MentionTextarea
               value={editBody}
-              onChange={e => onEditBodyChange(e.target.value)}
+              onChange={(v) => onEditBodyChange(v)}
+              profiles={profilesForEdit}
               rows={3}
-              style={{ ...textareaStyle, fontSize: '0.857rem' }}
             />
             <div style={{ display: 'flex', gap: S.xs, marginTop: S.xs }}>
               <Button size="sm" Icon={Check} onClick={onSaveEdit}>保存</Button>
@@ -266,7 +318,7 @@ function CommentItem({
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
             }}>
-              {comment.body}
+              <CommentBody body={comment.body} profiles={profilesForEdit} />
             </div>
             {canModify && (
               <div style={{ display: 'flex', gap: S.xs, marginTop: S.xs }}>
@@ -286,10 +338,17 @@ function CommentItem({
 }
 
 // ============================================================
-// 投稿フォーム
+// 投稿フォーム（v19：MentionTextarea で @ サジェスト対応）
 // ============================================================
-function CommentComposer({ body, onChange, onSubmit, submitting, currentUser }) {
+function CommentComposer({ body, onChange, onSubmit, submitting, currentUser, profiles = [] }) {
   const textareaRef = useRef(null);
+  const handleKeyDown = (e) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      onSubmit(e);
+    }
+  };
   return (
     <form onSubmit={onSubmit} style={{
       padding: S.m,
@@ -300,22 +359,15 @@ function CommentComposer({ body, onChange, onSubmit, submitting, currentUser }) 
       <div style={{ display: 'flex', gap: S.s, alignItems: 'flex-start' }}>
         <Avatar name={currentUser?.full_name} src={currentUser?.avatar_url} size={32} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <textarea
-            ref={textareaRef}
+          <MentionTextarea
+            textareaRef={textareaRef}
             value={body}
-            onChange={e => onChange(e.target.value)}
-            placeholder="この案件にコメント…"
+            onChange={(v) => onChange(v)}
+            profiles={profiles}
+            placeholder="この案件にコメント… （@ でメンション）"
             rows={3}
             disabled={submitting}
-            style={textareaStyle}
-            onKeyDown={(e) => {
-              // IME 変換中の Enter は無視
-              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault();
-                onSubmit(e);
-              }
-            }}
+            onKeyDown={handleKeyDown}
           />
           <div style={{
             display: 'flex',
@@ -325,7 +377,7 @@ function CommentComposer({ body, onChange, onSubmit, submitting, currentUser }) 
             gap: S.s,
           }}>
             <span style={{ fontSize: '0.7rem', color: C.textMuted }}>
-              ⌘ / Ctrl + Enter で投稿
+              @ でメンション・⌘ / Ctrl + Enter で投稿
             </span>
             <Button
               type="submit"
@@ -339,5 +391,39 @@ function CommentComposer({ body, onChange, onSubmit, submitting, currentUser }) 
         </div>
       </div>
     </form>
+  );
+}
+
+// ============================================================
+// コメント本文：@<full_name> をハイライト表示
+// ============================================================
+function CommentBody({ body, profiles }) {
+  const tokens = renderMentionTokens(body, profiles);
+  if (tokens.length === 0) return <>{body}</>;
+  return (
+    <>
+      {tokens.map((t, i) => {
+        if (t.type === 'mention') {
+          return (
+            <span
+              key={i}
+              title={t.profile.email || t.profile.full_name}
+              style={{
+                display: 'inline-block',
+                padding: '0 4px',
+                margin: '0 1px',
+                borderRadius: '3px',
+                background: C.accentLight,
+                color: C.accent,
+                fontWeight: 700,
+              }}
+            >
+              {t.text}
+            </span>
+          );
+        }
+        return <React.Fragment key={i}>{t.text}</React.Fragment>;
+      })}
+    </>
   );
 }
