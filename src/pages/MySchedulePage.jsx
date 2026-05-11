@@ -9,6 +9,7 @@ import Modal from '../components/ui/Modal';
 import Badge, { statusVariant, priorityVariant } from '../components/ui/Badge';
 import { formatTime } from '../utils/format';
 import TaskDetailModal from '../components/tasks/TaskDetailModal';
+import ScheduleFormModal, { loadScheduleParticipantIds } from '../components/schedules/ScheduleFormModal';
 import {
   listSchedules,
   listSchedulesByUser,
@@ -92,6 +93,12 @@ export default function MySchedulePage() {
   // タスク作成モーダル
   const [taskModalOpen, setTaskModalOpen]     = useState(false);
   const [taskModalDefault, setTaskModalDefault] = useState(null); // { due_date } で初期値を渡す
+
+  // 予定モーダル（v19 新規）
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleModalMode, setScheduleModalMode] = useState('create');
+  const [scheduleModalInitial, setScheduleModalInitial] = useState(null);
+  const [scheduleModalDefaults, setScheduleModalDefaults] = useState(null);
 
   const reload = useCallback(async () => {
     if (!user?.id) return;
@@ -196,6 +203,44 @@ export default function MySchedulePage() {
     await reload();
   };
 
+  // ─── 予定の作成・編集 ───
+  const openCreateScheduleFromDay = (date) => {
+    // 9:00〜10:00 を初期値に
+    const pad = (n) => String(n).padStart(2, '0');
+    const base = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    setScheduleModalMode('create');
+    setScheduleModalInitial(null);
+    setScheduleModalDefaults({
+      start_at: `${base}T09:00`,
+      end_at:   `${base}T10:00`,
+    });
+    setSelectedDate(null);
+    setScheduleModalOpen(true);
+  };
+  const openCreateScheduleGeneric = () => {
+    setScheduleModalMode('create');
+    setScheduleModalInitial(null);
+    setScheduleModalDefaults(null);
+    setScheduleModalOpen(true);
+  };
+  const openEditSchedule = async (schedule) => {
+    // 編集モーダル：参加者 ID を取得して initial にマージ
+    try {
+      const participantIds = await loadScheduleParticipantIds(schedule.id);
+      setScheduleModalMode('edit');
+      setScheduleModalInitial({ ...schedule, _participantIds: participantIds });
+      setScheduleModalDefaults(null);
+      setSelectedDate(null);
+      setScheduleModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      alert('予定の取得に失敗しました：' + (err?.message || ''));
+    }
+  };
+  const handleScheduleSaved = async () => {
+    await reload();
+  };
+
   if (!user) return null;
 
   const monthLabel = `${cursor.year}年 ${cursor.month + 1}月`;
@@ -222,9 +267,12 @@ export default function MySchedulePage() {
           <Calendar size={22} color={C.accent} />
           スケジュール
         </h1>
-        <div style={{ marginLeft: 'auto' }}>
-          <Button size="sm" Icon={Plus} onClick={openCreateTaskGeneric}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: S.xs, flexWrap: 'wrap' }}>
+          <Button size="sm" Icon={Plus} variant="secondary" onClick={openCreateTaskGeneric}>
             タスクを追加
+          </Button>
+          <Button size="sm" Icon={Plus} onClick={openCreateScheduleGeneric}>
+            予定を追加
           </Button>
         </div>
       </div>
@@ -322,10 +370,15 @@ export default function MySchedulePage() {
         onClose={() => setSelectedDate(null)}
         width="600px"
         footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-            <Button size="sm" Icon={Plus} variant="secondary" onClick={() => selectedDate && openCreateTaskFromDay(selectedDate)}>
-              この日にタスクを追加
-            </Button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: S.xs, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: S.xs, flexWrap: 'wrap' }}>
+              <Button size="sm" Icon={Plus} variant="secondary" onClick={() => selectedDate && openCreateScheduleFromDay(selectedDate)}>
+                この日に予定を追加
+              </Button>
+              <Button size="sm" Icon={Plus} variant="secondary" onClick={() => selectedDate && openCreateTaskFromDay(selectedDate)}>
+                この日にタスクを追加
+              </Button>
+            </div>
             <Button size="sm" variant="secondary" onClick={() => setSelectedDate(null)}>閉じる</Button>
           </div>
         }
@@ -335,9 +388,23 @@ export default function MySchedulePage() {
             events={selectedEvents}
             projectById={projectById}
             onProjectOpen={(projectId) => { setSelectedDate(null); navigate(`/projects/${projectId}`); }}
+            onScheduleClick={(schedule) => openEditSchedule(schedule)}
           />
         )}
       </Modal>
+
+      {/* 予定モーダル（v19 新規） */}
+      <ScheduleFormModal
+        open={scheduleModalOpen}
+        mode={scheduleModalMode}
+        initial={scheduleModalInitial}
+        projects={projects}
+        profiles={profiles}
+        currentUser={user}
+        defaults={scheduleModalDefaults}
+        onClose={() => setScheduleModalOpen(false)}
+        onSaved={handleScheduleSaved}
+      />
 
       {/* タスク作成モーダル */}
       <TaskDetailModal
@@ -442,7 +509,7 @@ function EventChip({ color, label }) {
   );
 }
 
-function DayDetail({ events, projectById, onProjectOpen }) {
+function DayDetail({ events, projectById, onProjectOpen, onScheduleClick }) {
   const { schedules, tasks } = events;
   const empty = schedules.length === 0 && tasks.length === 0;
   return (
@@ -458,14 +525,22 @@ function DayDetail({ events, projectById, onProjectOpen }) {
           <SectionHeader>予定</SectionHeader>
           <div style={{ display: 'flex', flexDirection: 'column', gap: S.xs }}>
             {schedules.map(s => (
-              <div key={s.id} style={{
-                padding: S.s,
-                borderRadius: '6px',
-                background: C.bg,
-                display: 'flex',
-                gap: S.s,
-                alignItems: 'flex-start',
-              }}>
+              <div
+                key={s.id}
+                onClick={onScheduleClick ? () => onScheduleClick(s) : undefined}
+                style={{
+                  padding: S.s,
+                  borderRadius: '6px',
+                  background: C.bg,
+                  display: 'flex',
+                  gap: S.s,
+                  alignItems: 'flex-start',
+                  cursor: onScheduleClick ? 'pointer' : 'default',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => { if (onScheduleClick) e.currentTarget.style.background = C.bgSub; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = C.bg; }}
+              >
                 <div style={{
                   flexShrink: 0,
                   width: '88px',
@@ -498,7 +573,7 @@ function DayDetail({ events, projectById, onProjectOpen }) {
                     )}
                     {s.project_id && projectById.get(s.project_id) && (
                       <button
-                        onClick={() => onProjectOpen(s.project_id)}
+                        onClick={(e) => { e.stopPropagation(); onProjectOpen(s.project_id); }}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',

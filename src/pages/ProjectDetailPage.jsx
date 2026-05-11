@@ -6,6 +6,7 @@ import {
   ListChecks,
   FileText,
   MessageSquare,
+  Calendar,
 } from 'lucide-react';
 import { C, S, ICON_SM } from '../styles/tokens';
 import { useAuth } from '../contexts/AuthContext';
@@ -39,6 +40,7 @@ import KanbanTab from '../components/projects/tabs/KanbanTab';
 import TaskListTab from '../components/projects/tabs/TaskListTab';
 import FilesTab from '../components/projects/tabs/FilesTab';
 import CommentsTab from '../components/projects/tabs/CommentsTab';
+import SchedulesTab from '../components/projects/tabs/SchedulesTab';
 import useReloadOnFocus from '../hooks/useReloadOnFocus';
 
 /**
@@ -50,11 +52,12 @@ import useReloadOnFocus from '../hooks/useReloadOnFocus';
  * タブ内のタスク機能はまだダミー（tasks 実 DB 化フェーズで連動）。
  */
 const TABS = [
-  { id: 'gantt',    label: 'ガント',     Icon: GanttChartSquare },
-  { id: 'kanban',   label: 'カンバン',   Icon: LayoutGrid },
-  { id: 'tasks',    label: 'タスク一覧', Icon: ListChecks },
-  { id: 'files',    label: 'ファイル',   Icon: FileText },
-  { id: 'comments', label: 'コメント',   Icon: MessageSquare }, // v17 新規
+  { id: 'gantt',     label: 'ガント',     Icon: GanttChartSquare },
+  { id: 'kanban',    label: 'カンバン',   Icon: LayoutGrid },
+  { id: 'tasks',     label: 'タスク一覧', Icon: ListChecks },
+  { id: 'schedules', label: '予定',       Icon: Calendar },     // v19 新規
+  { id: 'files',     label: 'ファイル',   Icon: FileText },
+  { id: 'comments',  label: 'コメント',   Icon: MessageSquare }, // v17 新規
 ];
 
 export default function ProjectDetailPage() {
@@ -275,11 +278,12 @@ export default function ProjectDetailPage() {
 
       {/* タブ本体 */}
       <div>
-        {activeTab === 'gantt'    && <GanttTab    project={project} />}
-        {activeTab === 'kanban'   && <KanbanTab   project={project} />}
-        {activeTab === 'tasks'    && <TaskListTab project={project} />}
-        {activeTab === 'files'    && <FilesTab    project={project} />}
-        {activeTab === 'comments' && <CommentsTab project={project} />}
+        {activeTab === 'gantt'     && <GanttTab     project={project} />}
+        {activeTab === 'kanban'    && <KanbanTab    project={project} />}
+        {activeTab === 'tasks'     && <TaskListTab  project={project} />}
+        {activeTab === 'schedules' && <SchedulesTab project={project} />}
+        {activeTab === 'files'     && <FilesTab     project={project} />}
+        {activeTab === 'comments'  && <CommentsTab  project={project} />}
       </div>
 
       {/* 編集モーダル */}
