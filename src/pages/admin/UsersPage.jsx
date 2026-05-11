@@ -3,7 +3,7 @@ import {
   UserPlus,
   Search,
   Pencil,
-  Trash2,
+  Ban,
   Shield,
   Crown,
   CheckCircle2,
@@ -18,7 +18,6 @@ import { inputStyle } from '../../components/ui/FormField';
 import {
   listProfiles,
   updateProfile,
-  deleteProfile,
   listTeams,
   listDepartments,
   listAllTeamMembers,
@@ -139,18 +138,20 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async () => {
+  // v21：ハード削除を廃止し、ソフト削除（is_active=false + チーム所属解除）に統一。
+  //      Auth ユーザーを完全に消すには Appwrite Console での手動操作が必要。
+  //      Web SDK の制約で `users.delete()` が使えないため、運用ルールで補う方針。
+  const handleSoftDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteProfile(deleteTarget.id);
-      // 配下の team_members も削除（ユーザーが所属していたチームから除外）
-      // ※ Auth ユーザーは Console から手動削除する必要あり（既知の制限）
+      await updateProfile(deleteTarget.id, { is_active: false });
+      // 配下の team_members を削除（ユーザーが所属していたチームから除外）
       await setUserMemberships(deleteTarget.id, []);
       setDeleteTarget(null);
       await reload();
     } catch (err) {
       console.error(err);
-      alert('削除に失敗しました：' + (err?.message || err));
+      alert('停止に失敗しました：' + (err?.message || err));
     }
   };
 
@@ -170,7 +171,7 @@ export default function UsersPage() {
             ユーザー管理
           </h1>
           <p style={{ color: C.textSub, fontSize: '0.857rem', marginTop: S.xs, marginBottom: 0 }}>
-            ユーザーの追加・権限変更・停止・削除を行います（管理者のみ）
+            ユーザーの追加・権限変更・停止を行います（管理者のみ）
           </p>
         </div>
         <div style={{ display: 'flex', gap: S.xs, flexWrap: 'wrap' }}>
@@ -316,17 +317,35 @@ export default function UsersPage() {
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title="ユーザーの削除"
+        title="アカウントを停止"
         message={
           deleteTarget && (
             <>
-              ユーザー「<strong>{deleteTarget.full_name}</strong>」を削除します。<br />
-              担当タスクは「未割当」になります。この操作は取り消せません。
+              ユーザー「<strong>{deleteTarget.full_name}</strong>」のアカウントを<strong>停止</strong>します。<br />
+              <ul style={{ margin: `${S.s} 0`, paddingLeft: '1.2em', fontSize: '0.857rem' }}>
+                <li>ログインできなくなります</li>
+                <li>所属チームから自動で除外されます</li>
+                <li>過去のコメント・タスク・予定などの履歴は残ります</li>
+                <li>停止を取り消すには「編集」から「有効」に戻します</li>
+              </ul>
+              <div style={{
+                marginTop: S.s,
+                padding: S.s,
+                background: C.warningBg,
+                border: `1px solid ${C.warning}`,
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                color: '#7a5b00',
+              }}>
+                ⚠ Auth ユーザー（メールアドレス + ログイン情報）の完全削除は、
+                Appwrite Console から手動で行う必要があります。
+                同じメールで再登録する場合は、Console での Auth 削除が必要です。
+              </div>
             </>
           )
         }
-        confirmLabel="削除する"
-        onConfirm={handleDelete}
+        confirmLabel="停止する"
+        onConfirm={handleSoftDelete}
         onClose={() => setDeleteTarget(null)}
       />
     </div>
@@ -434,9 +453,11 @@ function UserRow({ user, memberships = [], leader, iconOnly = false, onEdit, onD
           <Button variant="secondary" size="sm" Icon={Pencil} iconOnly={iconOnly} onClick={onEdit}>
             編集
           </Button>
-          <Button variant="danger" size="sm" Icon={Trash2} iconOnly={iconOnly} onClick={onDelete}>
-            削除
-          </Button>
+          {active && (
+            <Button variant="danger" size="sm" Icon={Ban} iconOnly={iconOnly} onClick={onDelete}>
+              停止
+            </Button>
+          )}
         </div>
       </Td>
     </tr>

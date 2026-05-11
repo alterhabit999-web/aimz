@@ -33,13 +33,20 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   // 起動時に Appwrite セッションをチェック
+  // v21：is_active=false なら自動でログアウト（停止中ユーザーがセッション維持で
+  // 居続けないように）
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const me = await account.get();
         const merged = await buildUser(me);
-        if (!cancelled) setUser(merged);
+        if (merged.is_active === false) {
+          try { await account.deleteSession('current'); } catch (_) {}
+          if (!cancelled) setUser(null);
+        } else {
+          if (!cancelled) setUser(merged);
+        }
       } catch {
         if (!cancelled) setUser(null);
       } finally {
@@ -61,10 +68,19 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ログイン（Appwrite Email + Password）
+  // v21：profiles.is_active === false のユーザーはログインを拒否
+  //      （Auth は残っているが、管理画面で「停止」されたユーザー対策）
   const login = useCallback(async (email, password) => {
     await account.createEmailPasswordSession(email, password);
     const me = await account.get();
     const merged = await buildUser(me);
+    if (merged.is_active === false) {
+      // セッションを破棄してエラーを投げる
+      try { await account.deleteSession('current'); } catch (_) {}
+      const err = new Error('このアカウントは停止されています。管理者にお問い合わせください。');
+      err.code = 'account_inactive';
+      throw err;
+    }
     setUser(merged);
   }, []);
 

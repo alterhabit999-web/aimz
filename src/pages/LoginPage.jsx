@@ -34,7 +34,9 @@ export default function LoginPage() {
     } catch (err) {
       // メッセージを日本語化
       let msg = err?.message || 'ログインに失敗しました';
-      if (/invalid credentials|wrong/i.test(msg)) {
+      if (err?.code === 'account_inactive') {
+        msg = 'このアカウントは停止されています。管理者にお問い合わせください。';
+      } else if (/invalid credentials|wrong/i.test(msg)) {
         msg = 'メールアドレスまたはパスワードが正しくありません';
       }
       setError(msg);
